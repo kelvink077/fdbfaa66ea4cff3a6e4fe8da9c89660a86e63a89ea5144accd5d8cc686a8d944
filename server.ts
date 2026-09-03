@@ -119,10 +119,6 @@ let userbotStatus: 'disconnected' | 'connecting' | 'awaiting_code' | 'awaiting_p
 let userbotLastError: string | null = null;
 let isEventHandlerRegistered = false;
 
-let pendingAuthClient: TelegramClient | null = null;
-let pendingAuthPhoneCodeHash: string | null = null;
-let pendingAuthPhoneNumber: string | null = null;
-
 const MODULE_NAMES: Record<string, string> = {
   cpf_1: 'CPF 1 (Consulta Básica)',
   cpf_2: 'CPF 2 (Consulta Intermediária)',
@@ -157,8 +153,6 @@ async function handleUserbotIncomingMessage(event: any) {
         senderName = sender.username ? `@${sender.username}` : (sender.firstName || 'Bot Telegram');
       }
     } catch {}
-
-    console.log(`[Userbot GramJS] Mensagem recebida de ${senderName}: "${incomingText.slice(0, 100)}..."`);
 
     let targetRequestId: string | null = null;
 
@@ -213,7 +207,7 @@ async function handleUserbotIncomingMessage(event: any) {
       date: message.date,
     });
   } catch (err: any) {
-    console.error('[Userbot GramJS] Erro ao processar evento de mensagem:', err?.message || err);
+    console.error('[Userbot GramJS] Erro ao processar mensagem:', err?.message || err);
   }
 }
 
@@ -407,7 +401,6 @@ function handleIncomingTelegramResponse(requestId: string, rawText: string, meta
 // =============================================================
 // API REST UP DEPIX v1 (Integração de Pagamento)
 // =============================================================
-// Recomendação: Coloque UPDEPIX_API_KEY lá no Render!
 const UPDEPIX_API_KEY = process.env.UPDEPIX_API_KEY || 'upx_c80bff3643de894eaca31915d11408cfc7869402be159a3b0e349ab1447f8e8f';
 const UPDEPIX_BASE_URL = (process.env.UPDEPIX_BASE_URL || 'https://updepix.cc/api/v1').replace(/\/$/, '');
 
@@ -441,22 +434,19 @@ app.post('/api/payment/create-pix', async (req, res) => {
     const externalId = `shazam-${userId || 'anon'}-${planId}-${Date.now()}`;
     const cleanName = (userName || userEmail?.split('@')[0] || 'Cliente Shazam Buscas').trim();
     
-    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
-    const host = req.get('host');
-    const webhookUrl = `${protocol}://${host}/api/payment/webhook`;
+    // CRAVADO: URL fixa do seu Render para o webhook da UP DEPIX
+    const webhookUrl = 'https://shazam-ygad.onrender.com/api/payment/webhook';
 
-    console.log(`[UP DEPIX] Criando PIX de R$ ${planConfig.amount} para ${cleanName}...`);
-
-    let responseData: any = null;
-    let upDepixSuccess = false;
+    console.log(`[UP DEPIX] Solicitando PIX de R$ ${planConfig.amount} para ${cleanName}...`);
 
     try {
       const upDepixRes = await fetch(`${UPDEPIX_BASE_URL}/deposits`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${UPDEPIX_API_KEY}`,
-          'X-API-Key': UPDEPIX_API_KEY,
+          'Authorization': `Bearer ${UPDEPIX_API_KEY}`, // Removido o X-API-KEY extra que causa bloqueio Cloudflare
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'User-Agent': 'ShazamBuscas-App/1.0' // Evita Erro 502/Cloudflare
         },
         body: JSON.stringify({
           amount: planConfig.amount,
@@ -469,37 +459,234 @@ app.post('/api/payment/create-pix', async (req, res) => {
         }),
       });
 
-      const jsonText = await upDepixRes.text();
-      try { responseData = JSON.parse(jsonText); } catch { responseData = { detail: jsonText }; }
+      const textResponse = await upDepixRes.text();
+      let responseData: any = null;
+
+      try {
+        responseData = JSON.parse(textResponse);
+      } catch (e) {
+        console.error('[UP DEPIX] Cloudflare bloqueou a requisição ou servidor falhou. Resposta original:', textResponse.slice(0, 150));
+        return res.status(502).json({ 
+          success: false, 
+          error: `O servidor de pagamentos recusou a conexão. Tente novamente em instantes.` 
+        });
+      }
 
       if (upDepixRes.ok && responseData?.data?.id) {
-        upDepixSuccess = true;
+        const depData = responseData.data;
+        localDeposits.set(depData.id, {
+          id: depData.id, planId, userId, amount: planConfig.amount, daysAdded: planConfig.days, status: 'pending'
+        });
+        
+        return res.json({
+          success: true,
+          data: {
+            id: depData.id, 
+            planId, 
+            amount: planConfig.amount,
+            qrCopyPaste: depData.qr_copy_paste, 
+            qrImageUrl: depData.qr_image_url, 
+            status: 'pending',
+          },
+        });
+      } else {
+        console.warn('[UP DEPIX] Erro lógico da API:', responseData);
+        return res.status(400).json({ 
+          success: false, 
+          error: responseData?.detail || responseData?.message || 'A operadora recusou a transação. Verifique os dados e o CPF.' 
+        });
       }
     } catch (fetchErr: any) {
       console.error('[UP DEPIX] Erro de rede:', fetchErr?.message || fetchErr);
+      return res.status(500).json({ success: false, error: 'Falha de comunicação com o servidor financeiro.' });
+    }
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: 'Falha interna do servidor backend.' });
+  }
+});
+
+// Check status of PIX deposit
+app.all(['/api/payment/check-status/:id', '/api/payment/deposits/:id'], async (req, res) => {
+  const depositId = req.params.id;
+  if (!depositId) {
+    return res.status(400).json({ success: false, error: 'ID do depósito é obrigatório.' });
+  }
+
+  const localRecord = localDeposits.get(depositId);
+
+  if (localRecord && localRecord.status === 'completed') {
+    return res.json({
+      success: true,
+      data: {
+        id: depositId,
+        status: 'completed',
+        isPaid: true,
+        planId: localRecord.planId,
+        planName: localRecord.planName,
+        daysAdded: localRecord.daysAdded,
+        amount: localRecord.amount,
+        completedAt: localRecord.completedAt || new Date().toISOString(),
+      },
+    });
+  }
+
+  try {
+    const checkRes = await fetch(`${UPDEPIX_BASE_URL}/deposits/${depositId}/check-status`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${UPDEPIX_API_KEY}`,
+        'Content-Type': 'application/json',
+        'User-Agent': 'ShazamBuscas-App/1.0'
+      },
+      body: JSON.stringify({}),
+    });
+
+    let checkJson: any = null;
+    try { checkJson = await checkRes.json(); } catch {}
+
+    let currentStatus = checkJson?.data?.status;
+
+    if (!currentStatus) {
+      const getRes = await fetch(`${UPDEPIX_BASE_URL}/deposits/${depositId}`, {
+        headers: {
+          'Authorization': `Bearer ${UPDEPIX_API_KEY}`,
+          'User-Agent': 'ShazamBuscas-App/1.0'
+        },
+      });
+      const getJson: any = await getRes.json();
+      currentStatus = getJson?.data?.status;
     }
 
-    if (upDepixSuccess && responseData?.data) {
-      const depData = responseData.data;
-      localDeposits.set(depData.id, {
-        id: depData.id, planId, userId, amount: planConfig.amount, daysAdded: planConfig.days, status: 'pending'
-      });
+    if (['completed', 'approved', 'depix_sent'].includes(currentStatus)) {
+      if (localRecord) {
+        localRecord.status = 'completed';
+        localRecord.completedAt = new Date().toISOString();
+      }
+
       return res.json({
         success: true,
         data: {
-          id: depData.id, planId, amount: planConfig.amount,
-          qrCopyPaste: depData.qr_copy_paste, qrImageUrl: depData.qr_image_url, status: 'pending',
+          id: depositId,
+          status: 'completed',
+          isPaid: true,
+          planId: localRecord?.planId || 'biweekly',
+          daysAdded: localRecord?.daysAdded || 15,
+          amount: localRecord?.amount || 19.90,
+          completedAt: new Date().toISOString(),
         },
       });
     }
 
-    return res.status(500).json({ success: false, error: responseData?.detail || 'Erro ao comunicar com o Gateway UP DEPIX.' });
+    return res.json({
+      success: true,
+      data: {
+        id: depositId,
+        status: currentStatus || 'pending',
+        isPaid: false,
+        planId: localRecord?.planId,
+        daysAdded: localRecord?.daysAdded,
+        amount: localRecord?.amount,
+      },
+    });
   } catch (err: any) {
-    return res.status(500).json({ success: false, error: 'Falha interna do servidor.' });
+    console.warn(`[UP DEPIX] Erro ao checar status do depósito ${depositId}:`, err?.message || err);
+  }
+
+  return res.json({
+    success: true,
+    data: {
+      id: depositId,
+      status: localRecord?.status || 'pending',
+      isPaid: localRecord?.status === 'completed',
+      planId: localRecord?.planId,
+      daysAdded: localRecord?.daysAdded,
+      amount: localRecord?.amount,
+    },
+  });
+});
+
+// Endpoint para simulação de confirmação de pagamento (para testes do admin)
+app.post('/api/payment/simulate-confirm/:id', (req, res) => {
+  const depositId = req.params.id;
+  const localRecord = localDeposits.get(depositId);
+
+  if (localRecord) {
+    localRecord.status = 'completed';
+    localRecord.completedAt = new Date().toISOString();
+
+    io.emit('payment:confirmed', {
+      depositId,
+      userId: localRecord.userId,
+      planId: localRecord.planId,
+      planName: localRecord.planName,
+      daysAdded: localRecord.daysAdded,
+    });
+
+    return res.json({
+      success: true,
+      message: 'Pagamento confirmado com sucesso (Simulação imediata)',
+      data: {
+        id: depositId,
+        status: 'completed',
+        isPaid: true,
+        planId: localRecord.planId,
+        planName: localRecord.planName,
+        daysAdded: localRecord.daysAdded,
+        amount: localRecord.amount,
+        completedAt: localRecord.completedAt,
+      },
+    });
+  }
+
+  return res.status(404).json({ success: false, error: `Depósito ${depositId} não encontrado.` });
+});
+
+// Webhook receiver for UP DEPIX events (deposit.completed)
+app.post('/api/payment/webhook', (req, res) => {
+  try {
+    const body = req.body;
+    console.log('[UP DEPIX Webhook] Evento recebido:', body?.event || 'desconhecido');
+
+    const event = body?.event;
+    const data = body?.data;
+
+    if (event === 'deposit.completed' || data?.status === 'completed' || data?.status === 'approved') {
+      const depositId = data?.id;
+      const externalId = data?.external_id;
+
+      let matchedRecord = depositId ? localDeposits.get(depositId) : undefined;
+      if (!matchedRecord && externalId) {
+        for (const rec of localDeposits.values()) {
+          if (rec.externalId === externalId) {
+            matchedRecord = rec;
+            break;
+          }
+        }
+      }
+
+      if (matchedRecord) {
+        matchedRecord.status = 'completed';
+        matchedRecord.completedAt = new Date().toISOString();
+
+        io.emit('payment:confirmed', {
+          depositId: matchedRecord.id,
+          userId: matchedRecord.userId,
+          planId: matchedRecord.planId,
+          planName: matchedRecord.planName,
+          daysAdded: matchedRecord.daysAdded,
+        });
+
+        console.log(`[UP DEPIX Webhook] Depósito ${matchedRecord.id} confirmado e creditado para usuário ${matchedRecord.userId}`);
+      }
+    }
+
+    return res.status(200).json({ success: true, message: 'Webhook processado' });
+  } catch (err: any) {
+    console.error('[UP DEPIX Webhook] Erro ao processar webhook:', err);
+    return res.status(200).json({ success: false, error: err?.message });
   }
 });
 
-// Outros Endpoints de auth e webhook omitidos para economizar espaço (já estavam corretos no seu código)
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: Date.now() }));
 
 async function startServer() {
@@ -515,4 +702,5 @@ async function startServer() {
     console.log(`[IntelSaaS Backend] Servidor rodando em http://localhost:${PORT}`);
   });
 }
+
 startServer();
