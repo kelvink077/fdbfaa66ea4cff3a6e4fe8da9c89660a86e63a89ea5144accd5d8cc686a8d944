@@ -1,0 +1,8 @@
+{
+  "name": "Remix Aladim - SistemaB2B",
+  "description": "Plataforma B2B de inteligência cadastral e investigativa Shazam Buscas para consultas avançadas (CPF, CNPJ, Nome, E-mail, Placa, Telefone) com dossiês em tempo real.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "entities": {
+    "UserProfile": {
+      "collection": "users",
+      "fields": {
+        "id": "string",
+        "email": "string",
+        "displayName": "string",
+        "photoURL": "string",
+        "plan": "string",
+        "planStatus": "string",
+        "trialStartedAt": "string",
+        "trialEndsAt": "string",
+        "trialDaysTotal": "number",
+        "createdAt": "string",
+        "lastLoginAt": "string"
+      }
+    },
+    "ConsultaRecord": {
+      "collection": "consultas",
+      "fields": {
+        "id": "string",
+        "userId": "string",
+        "userEmail": "string",
+        "parametro": "string",
+        "modulo": "string",
+        "modulo_titulo": "string",
+        "status": "string",
+        "timestamp": "string",
+        "tempo_resposta_ms": "number",
+        "resultado_resumo": "string",
+        "resposta_bruta": "string"
+      }
+    }
+  }
+}
