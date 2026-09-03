@@ -138,7 +138,7 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
     if (setDocError) setDocError('');
   };
 
-  // Step 1: Submit to UP DEPIX /api/payment/create-pix
+  // Step 1: Submit to UP DEPIX /api/payment/create-pix no backend
   const handleGeneratePix = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
@@ -152,7 +152,10 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
     setErrorMessage('');
 
     try {
-      const response = await fetch('/api/payment/create-pix', {
+      // URL base do Backend no Render
+      const backendUrl = import.meta.env.VITE_API_URL || 'https://shazam-ygad.onrender.com';
+
+      const response = await fetch(`${backendUrl}/api/payment/create-pix`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -202,7 +205,8 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
     if (isManual) setIsCheckingStatus(true);
 
     try {
-      const res = await fetch(`/api/payment/check-status/${depId}`);
+      const backendUrl = import.meta.env.VITE_API_URL || 'https://shazam-ygad.onrender.com';
+      const res = await fetch(`${backendUrl}/api/payment/check-status/${depId}`);
       const json = await res.json();
 
       if (json.success && json.data?.isPaid) {
@@ -238,7 +242,8 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
     setIsCheckingStatus(true);
 
     try {
-      const res = await fetch(`/api/payment/simulate-confirm/${depositId}`, {
+      const backendUrl = import.meta.env.VITE_API_URL || 'https://shazam-ygad.onrender.com';
+      const res = await fetch(`${backendUrl}/api/payment/simulate-confirm/${depositId}`, {
         method: 'POST',
       });
       const json = await res.json();
