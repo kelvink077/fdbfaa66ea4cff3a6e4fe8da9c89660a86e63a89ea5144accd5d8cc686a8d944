@@ -13,12 +13,17 @@
   to = "/index.html"
   status = 200
 
-# Optional: If you want Netlify to proxy backend API requests directly to your Render or Railway service:
-# [[redirects]]
-#   from = "/api/*"
-#   to = "https://SEU-BACKEND-RENDER-OU-RAILWAY.onrender.com/api/:splat"
-#   status = 200
-#   force = true
+[[redirects]]
+  from = "/socket.io/*"
+  to = "https://shazam-ygad.onrender.com/socket.io/*"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/*"
+  to = "https://shazam-ygad.onrender.com/api/*"
+  status = 200
+  force = true
 
 # Security & Cache Headers for production delivery
 [[headers]]
@@ -33,3 +38,4 @@
   for = "/assets/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
+```[cite: 1]

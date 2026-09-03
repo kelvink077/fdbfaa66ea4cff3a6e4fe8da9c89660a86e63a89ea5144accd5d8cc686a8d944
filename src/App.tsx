@@ -134,12 +134,13 @@ export default function App() {
         botUsername: data.userbotProfile?.username || data.userbotProfile?.firstName,
       }));
     });
-
-    // When backend acknowledges the request
-    socketInstance.on('query:ack', () => {
-      setLoadingStepText('Despachado com sucesso! Aguardando retorno da consulta...');
+// Connect to Socket.io on mount
+  useEffect(() => {
+    const socketInstance: Socket = io(window.location.origin, {
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
     });
-
     // When backend delivers the response
     socketInstance.on('query:response', (data: any) => {
       console.log('[Socket.io Client] Resposta recebida:', data);
