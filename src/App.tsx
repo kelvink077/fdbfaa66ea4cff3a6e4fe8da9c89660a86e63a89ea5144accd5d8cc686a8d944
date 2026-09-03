@@ -90,7 +90,8 @@ export default function App() {
 
   // Connect to Socket.io on mount
   useEffect(() => {
-    const socketInstance: Socket = io(window.location.origin, {
+    const backendUrl = import.meta.env.VITE_API_URL || 'https://shazam-ygad.onrender.com';
+    const socketInstance: Socket = io(backendUrl, {
       transports: ['websocket', 'polling'],
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,
@@ -134,13 +135,12 @@ export default function App() {
         botUsername: data.userbotProfile?.username || data.userbotProfile?.firstName,
       }));
     });
-// Connect to Socket.io on mount
-  useEffect(() => {
-    const socketInstance: Socket = io(window.location.origin, {
-      transports: ['websocket', 'polling'],
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000,
+
+    // When backend acknowledges the request
+    socketInstance.on('query:ack', () => {
+      setLoadingStepText('Despachado com sucesso! Aguardando retorno da consulta...');
     });
+
     // When backend delivers the response
     socketInstance.on('query:response', (data: any) => {
       console.log('[Socket.io Client] Resposta recebida:', data);
