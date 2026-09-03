@@ -71,8 +71,8 @@ export default function App() {
   const [authError, setAuthError] = useState<AuthErrorDetails | null>(null);
   const [isAuthErrorModalOpen, setIsAuthErrorModalOpen] = useState(false);
 
-  // Auto-resposta para testes e agilidade (habilitado por padrão)
-  const [autoSimulate, setAutoSimulate] = useState(true);
+  // Auto-resposta desativada para forçar o uso real do Telegram configurado no Render
+  const [autoSimulate, setAutoSimulate] = useState(false);
   const autoSimulateTimerRef = useRef<NodeJS.Timeout | null>(null);
   const currentPendingIdRef = useRef<string | null>(null);
 
