@@ -9,7 +9,8 @@ import {
   Loader2,
   ShieldCheck,
   Zap,
-  FileCode
+  FileCode,
+  Sparkles
 } from 'lucide-react';
 import type { User as FirebaseUser } from 'firebase/auth';
 import type { UserProfileData } from '../lib/firebase';
@@ -29,6 +30,7 @@ interface HeaderProps {
   onOpenPricing?: () => void;
   onOpenProfile?: () => void;
   onOpenCode?: () => void;
+  onOpenProModal?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -44,8 +46,10 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenPricing,
   onOpenProfile,
   onOpenCode,
+  onOpenProModal,
 }) => {
   const validity = calculateAccountValidity(userProfile);
+
   return (
     <header className="h-20 border-b border-[#003734] flex items-center justify-between px-6 lg:px-12 bg-[#012624] sticky top-0 z-30">
       {/* Left: Brand / Shazam Buscas Mark with Dynamic Animated Logo */}
@@ -183,12 +187,19 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
-        {/* Engine Status */}
-        <div className="flex items-center gap-2 px-3 py-2 bg-[#003734] rounded-[6px] border border-[#00827c]/30 text-[11px] font-mono uppercase tracking-[0.1em] text-[#cbfffc]">
-          <ShieldCheck className="w-3.5 h-3.5 text-[#cbfffc]" />
-          <span className="hidden sm:inline">MOTOR SHAZAM BUSCAS ONLINE</span>
-          <span className="sm:hidden">ONLINE</span>
-        </div>
+        {/* BUSCAS PRO Animated Button */}
+        <button
+          id="btn-buscas-pro"
+          onClick={onOpenProModal}
+          className="relative group overflow-hidden flex items-center gap-2 px-3.5 py-2 rounded-[8px] bg-gradient-to-r from-[#ffd166] via-[#f59e0b] to-[#d97706] hover:from-[#ffe082] hover:to-[#f59e0b] text-[#0f172a] font-bold text-xs uppercase tracking-wider shadow-lg shadow-[#ffd166]/20 border border-[#fef08a] transition-all cursor-pointer animate-pulse hover:scale-105"
+          title="Acessar painel exclusivo BUSCAS PRO"
+        >
+          <Sparkles className="w-3.5 h-3.5 text-[#0f172a] fill-[#0f172a]" />
+          <span className="font-extrabold tracking-wider font-mono">BUSCAS PRO</span>
+          <span className="text-[9px] bg-[#0f172a] text-[#ffd166] px-1.5 py-0.5 rounded font-mono font-bold tracking-tight">
+            VIP
+          </span>
+        </button>
 
         {/* WebSocket Status */}
         <div className="flex items-center gap-1.5 px-2.5 py-2 bg-[#011d1c] rounded-[6px] border border-[#003734] text-[11px] uppercase tracking-[0.12em] text-[#bbc7c6] font-mono">

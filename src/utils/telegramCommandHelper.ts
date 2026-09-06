@@ -32,49 +32,117 @@ export function getTelegramCommand(moduleType: string, queryParam: string): {
   formattedParam: string;
   fullMessage: string;
 } {
-  const mod = (moduleType || '').toLowerCase().replace(/[^a-z0-9_]/g, '');
+  const rawMod = (moduleType || '').toLowerCase().trim();
+  const isPro = rawMod.startsWith('pro');
+  // Remove categoricamente qualquer prefixo pro_ ou pro do identificador do módulo
+  const mod = rawMod.replace(/^pro_?/, '').replace(/[^a-z0-9_]/g, '');
   let command = '/cpf1';
   let cleanParam = (queryParam || '').trim();
   let formattedParam = cleanParam;
 
-  if (mod === 'cpf_1' || mod === 'cpf1') {
+  // 1. 🆔 /cpf1, /cpf2, /cpf3 (Módulos Padrão de CPF) e /cpf (Módulo Pro VIP)
+  if (rawMod === 'cpf_1' || rawMod === 'cpf1' || (!isPro && (mod === 'cpf1' || mod === 'cpf_1'))) {
     command = '/cpf1';
     cleanParam = cleanParam.replace(/\D/g, '');
-    formattedParam = formatCpf(cleanParam);
-  } else if (mod === 'cpf_2' || mod === 'cpf2') {
+    formattedParam = cleanParam;
+  } else if (rawMod === 'cpf_2' || rawMod === 'cpf2' || (!isPro && (mod === 'cpf2' || mod === 'cpf_2'))) {
     command = '/cpf2';
     cleanParam = cleanParam.replace(/\D/g, '');
-    formattedParam = formatCpf(cleanParam);
-  } else if (mod === 'cpf_3' || mod === 'cpf3') {
+    formattedParam = cleanParam;
+  } else if (rawMod === 'cpf_3' || rawMod === 'cpf3' || (!isPro && (mod === 'cpf3' || mod === 'cpf_3'))) {
     command = '/cpf3';
     cleanParam = cleanParam.replace(/\D/g, '');
-    formattedParam = formatCpf(cleanParam);
-  } else if (mod === 'cnpj') {
-    command = '/cnpj';
+    formattedParam = cleanParam;
+  } else if (isPro && mod.includes('cpf')) {
+    command = '/cpf';
     cleanParam = cleanParam.replace(/\D/g, '');
-    formattedParam = formatCnpj(cleanParam);
-  } else if (mod === 'telefone') {
+    formattedParam = cleanParam;
+  } else if (mod.includes('cpf')) {
+    command = '/cpf1';
+    cleanParam = cleanParam.replace(/\D/g, '');
+    formattedParam = cleanParam;
+  }
+  // 2. 📸 /foto 12345678901 (Foto cadastral)
+  else if (mod.includes('foto')) {
+    command = '/foto';
+    cleanParam = cleanParam.replace(/\D/g, '');
+    formattedParam = cleanParam;
+  }
+  // 3. 📱 /telefone 11999887766 (Vínculos do telefone com pessoas)
+  else if (mod.includes('telefone') || mod.includes('tel')) {
     command = '/telefone';
     cleanParam = cleanParam.replace(/\D/g, '');
-    formattedParam = formatPhone(cleanParam);
-  } else if (mod === 'placa') {
-    command = '/placa';
-    cleanParam = cleanParam.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-    formattedParam = formatPlaca(cleanParam);
-  } else if (mod === 'email') {
+    formattedParam = cleanParam;
+  }
+  // 4. 👤 /nome Joao Silva Ramos (Busca pessoas pelo nome)
+  else if (mod.includes('nome')) {
+    command = '/nome';
+    cleanParam = cleanParam.replace(/\s+/g, ' ').trim();
+    formattedParam = cleanParam;
+  }
+  // 5. 📧 /email usuario@dominio.com (Vínculos do email + Score de qualidade)
+  else if (mod.includes('email') || mod.includes('mail')) {
     command = '/email';
     cleanParam = cleanParam.toLowerCase().trim();
     formattedParam = cleanParam;
-  } else if (mod === 'nome') {
-    command = '/nome';
-    cleanParam = cleanParam.trim();
+  }
+  // 6. 📍 /endereco 01310100 ou /endereco SAO PAULO SP (Moradores do endereço/CEP)
+  else if (mod.includes('endereco')) {
+    command = '/endereco';
+    const trimmed = cleanParam.trim();
+    if (/^\d{5}-?\d{3}$/.test(trimmed)) {
+      cleanParam = trimmed.replace(/\D/g, '');
+    } else {
+      cleanParam = trimmed;
+    }
+    formattedParam = cleanParam;
+  }
+  // 7. 📍 /cep 01310100 (Logradouro, bairro, cidade, UF)
+  else if (mod.includes('cep')) {
+    command = '/cep';
+    cleanParam = cleanParam.replace(/\D/g, '');
+    formattedParam = cleanParam;
+  }
+  // 8. 🏢 /cnpj 12345678000190 (Razão social, sócios, situação)
+  else if (mod.includes('cnpj')) {
+    command = '/cnpj';
+    cleanParam = cleanParam.replace(/\D/g, '');
+    formattedParam = cleanParam;
+  }
+  // 9. 🗳️ /titulo 123456780191 (Dados do título de eleitor)
+  else if (mod.includes('titulo')) {
+    command = '/titulo';
+    cleanParam = cleanParam.replace(/\D/g, '');
+    formattedParam = cleanParam;
+  }
+  // 10. 👩👧👦 /mae Maria Silva Santos (Busca pelo nome da mãe)
+  else if (mod.includes('mae')) {
+    command = '/mae';
+    cleanParam = cleanParam.replace(/\s+/g, ' ').trim();
+    formattedParam = cleanParam;
+  }
+  // 11. 🚗 /placa AAA9999 (Relatório veicular completo)
+  else if (mod.includes('placa')) {
+    command = '/placa';
+    cleanParam = cleanParam.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
     formattedParam = cleanParam;
   } else {
-    command = `/${mod.replace('_', '')}`;
+    // Fallback absoluto: garante que NUNCA começa com pro
+    const base = mod.replace(/^pro_?/, '');
+    command = `/${base || 'cpf'}`;
+    cleanParam = cleanParam.trim();
+    formattedParam = cleanParam;
   }
 
-  // A mensagem disparada ao Telegram deve ser EXCLUSIVAMENTE o comando e o alvo
-  const fullMessage = `${command} ${cleanParam}`.trim();
+  // Vacina final absoluta: NUNCA permitir comandos com /pro_, /pro ou /pro[espaço]
+  command = command.replace(/^\/pro[_\s]*/i, '/');
+  if (command === '/' || !command) {
+    command = '/cpf';
+  }
+
+  // A mensagem disparada ao Telegram deve ser EXCLUSIVAMENTE o comando e o alvo limpo
+  // Ex: /cpf 12345678901 ou /foto 12345678901 ou /telefone 11999887766
+  const fullMessage = cleanParam ? `${command} ${cleanParam}`.trim() : command;
 
   return {
     command,
@@ -127,6 +195,8 @@ const NEGATIVE_PATTERNS = [
   /nada consta/i,
   /n[ãa]o (foi )?localizado/i,
   /n[ãa]o encontrado/i,
+  /nao encontrado/i,
+  /❌\s*n[ãa]o encontrado/i,
   /cpf n[ãa]o cadastrado/i,
   /documento n[ãa]o encontrado/i,
   /sem dados dispon[íi]veis/i,
@@ -137,6 +207,8 @@ const NEGATIVE_PATTERNS = [
   /nenhum dado retornado/i,
   /placa n[ãa]o encontrada/i,
   /cnpj n[ãa]o localizado/i,
+  /telefone n[ãa]o encontrado/i,
+  /nome n[ãa]o encontrado/i,
 ];
 
 export function isNegativeResponse(text: string): boolean {
@@ -197,6 +269,7 @@ export function checkTelegramExactMatch(
 
   // Avaliação do status exato
   if (isNeg) {
+    const rawNote = rawText.includes('❌') ? '❌ Não encontrado.' : 'Nenhum registro localizado.';
     return {
       hasExactMatch: false,
       status: 'not_found',
@@ -206,7 +279,7 @@ export function checkTelegramExactMatch(
       telegramCommand,
       statusLabel: 'Nenhum Registro Encontrado (Nada Consta)',
       statusBadgeColor: 'red',
-      details: `A central de inteligência Shazam Buscas respondeu à busca indicando que NÃO CONSTAM dados ou registros cadastrados para o alvo "${cleanParam}".`,
+      details: `A central de inteligência retornou "${rawNote}". Não constam registros cadastrados para o parâmetro "${cleanParam || queryParam}".`,
       matchedTextFound,
       isNegativeReported: true,
     };
@@ -228,9 +301,9 @@ export function checkTelegramExactMatch(
     };
   }
 
-  // Se tem dados cadastrais estruturados (ex: Nome, Situação, Nascimento) retornados em resposta à mensagem
+  // Se tem dados cadastrais ou veiculares estruturados (ex: Nome, Situação, Chassi, Renavam, Marca) retornados em resposta à mensagem
   if (
-    /NOME:|SITUAÇÃO:|DATA DE NASCIMENTO:|RAZÃO SOCIAL:|PROPRIETÁRIO:|OPERADORA:/i.test(rawText)
+    /NOME:|SITUAÇÃO:|DATA DE NASCIMENTO:|RAZÃO SOCIAL:|PROPRIETÁRIO:|OPERADORA:|CHASSI:|RENAVAM:|MARCA[\/:]|MODELO:|PLACA:|VE[ÍI]CULO:|ANO\s*(?:FAB|MODELO)|COMBUST[ÍI]VEL:/i.test(rawText)
   ) {
     return {
       hasExactMatch: true,

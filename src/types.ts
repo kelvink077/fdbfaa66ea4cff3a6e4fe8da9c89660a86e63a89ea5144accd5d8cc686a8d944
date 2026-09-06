@@ -9,7 +9,18 @@ export type QueryModuleType =
   | 'nome'
   | 'email'
   | 'placa'
-  | 'telefone';
+  | 'telefone'
+  | 'pro_cpf'
+  | 'pro_telefone'
+  | 'pro_nome'
+  | 'pro_email'
+  | 'pro_endereco'
+  | 'pro_cep'
+  | 'pro_cnpj'
+  | 'pro_titulo'
+  | 'pro_mae'
+  | 'pro_foto'
+  | 'pro_placa';
 
 export interface QueryModuleInfo {
   id: QueryModuleType;
@@ -43,6 +54,12 @@ export interface QueryRecord {
   rawResponse?: string;
   parsedReport?: ParsedIntelligenceReport;
   exactMatch?: ExactMatchResult;
+  txtContent?: string;
+  txtFileName?: string;
+  photoUrl?: string;
+  photos?: Array<{ url: string; fileName?: string; caption?: string; sizeBytes?: number }>;
+  isNotFound?: boolean;
+  isPro?: boolean;
   error?: string;
 }
 

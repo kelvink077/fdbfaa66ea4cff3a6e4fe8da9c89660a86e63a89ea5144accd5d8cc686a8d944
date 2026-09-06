@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity, Zap, Bot, Shield, ArrowUpRight } from 'lucide-react';
+import { Activity, Zap, Shield } from 'lucide-react';
 import { TelegramConfigState } from '../types';
 
 interface StatsBarProps {

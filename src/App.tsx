@@ -15,6 +15,7 @@ import { UserProfileModal } from './components/UserProfileModal';
 import { PixCheckoutModal } from './components/PixCheckoutModal';
 import { SaaSLandingLoginPage } from './components/SaaSLandingLoginPage';
 import { AuthErrorModal, AuthErrorDetails } from './components/AuthErrorModal';
+import { ProSearchModal } from './components/ProSearchModal';
 import { 
   QueryModuleType, 
   QueryRecord, 
@@ -31,7 +32,8 @@ import {
   saveConsultaToFirestore, 
   fetchUserHistoryFromFirestore,
   createGuestOperatorUser,
-  UserProfileData
+  UserProfileData,
+  deduzirConsulta // <--- Importação adicionada
 } from './lib/firebase';
 import { 
   CheckCircle2, 
@@ -65,6 +67,8 @@ export default function App() {
   const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isPixModalOpen, setIsPixModalOpen] = useState(false);
+  const [isProModalOpen, setIsProModalOpen] = useState(false);
+  const [isProMode, setIsProMode] = useState(false);
   const [selectedPlanForPix, setSelectedPlanForPix] = useState<'weekly' | 'biweekly' | 'monthly'>('monthly');
 
   // Controle de erros de autenticação OAuth (ex: domínio não autorizado no Netlify)
@@ -90,7 +94,8 @@ export default function App() {
 
   // Connect to Socket.io on mount
   useEffect(() => {
-    const backendUrl = import.meta.env.VITE_API_URL || 'https://shazam-ygad.onrender.com';
+    const isNetlify = typeof window !== 'undefined' && window.location.hostname.includes('netlify.app');
+    const backendUrl = import.meta.env.VITE_API_URL || (isNetlify ? 'https://shazam-ygad.onrender.com' : (typeof window !== 'undefined' ? window.location.origin : ''));
     const socketInstance: Socket = io(backendUrl, {
       transports: ['websocket', 'polling'],
       reconnectionAttempts: 10,
@@ -122,6 +127,7 @@ export default function App() {
         apiIdConfigured: data.apiIdConfigured,
         userName: data.userbotProfile?.firstName,
         phone: data.userbotProfile?.phone,
+        lastError: data.lastError || data.lastUserbotError || null,
       });
     });
 
@@ -133,12 +139,21 @@ export default function App() {
         userName: data.userbotProfile?.firstName,
         phone: data.userbotProfile?.phone,
         botUsername: data.userbotProfile?.username || data.userbotProfile?.firstName,
+        lastError: data.lastError || null,
       }));
     });
 
     // When backend acknowledges the request
     socketInstance.on('query:ack', () => {
       setLoadingStepText('Despachado com sucesso! Aguardando retorno da consulta...');
+    });
+
+    // When intermediate progress / status is received (e.g. "⏳ Consultando Nome...")
+    socketInstance.on('query:progress', (data: any) => {
+      console.log('[Socket.io Client] Progresso intermediário:', data);
+      if (data?.message) {
+        setLoadingStepText(data.message);
+      }
     });
 
     // When backend delivers the response
@@ -152,10 +167,17 @@ export default function App() {
       }
       currentPendingIdRef.current = null;
 
+      const isNotFound = 
+        Boolean(data.isNotFound) ||
+        data.exactMatch?.status === 'not_found' ||
+        data.exactMatch?.isNegativeReported ||
+        /n[ãa]o encontrado|nao encontrado|nada consta|n[ãa]o localizado|nenhum registro|❌/i.test(data.rawResponse || '');
+
       const parsed = parseIntelligenceResponse(data.rawResponse || '', data.moduleType, data.queryParam);
       const completeRecord: QueryRecord = {
         ...data,
         status: 'completed',
+        isNotFound,
         parsedReport: parsed,
       };
 
@@ -178,6 +200,54 @@ export default function App() {
           console.warn('[Firestore] Falha ao persistir consulta:', err);
         });
       }
+    });
+
+    // When a TXT file is downloaded / available for a query
+    socketInstance.on('query:txt_available', (data: any) => {
+      console.log('[Socket.io Client] Novo arquivo TXT disponível:', data);
+      setCurrentActiveRecord((prev) => {
+        if (prev && prev.id === data.id) {
+          const updated = { ...prev, txtContent: data.txtContent, txtFileName: data.txtFileName };
+          if (data.rawResponse && (!prev.rawResponse || prev.rawResponse.length < data.rawResponse.length)) {
+            updated.rawResponse = data.rawResponse;
+            updated.parsedReport = data.parsedReport || parseIntelligenceResponse(data.rawResponse, prev.moduleType, prev.queryParam);
+          }
+          return updated;
+        }
+        return prev;
+      });
+      setHistory((prev) =>
+        prev.map((item) => {
+          if (item.id === data.id) {
+            const shouldUpdateResponse = Boolean(data.rawResponse && (!item.rawResponse || item.rawResponse.length < data.rawResponse.length));
+            return {
+              ...item,
+              txtContent: data.txtContent,
+              txtFileName: data.txtFileName,
+              rawResponse: shouldUpdateResponse ? data.rawResponse : item.rawResponse,
+              parsedReport: shouldUpdateResponse ? (data.parsedReport || parseIntelligenceResponse(data.rawResponse, item.moduleType, item.queryParam)) : item.parsedReport,
+            };
+          }
+          return item;
+        })
+      );
+    });
+
+    socketInstance.on('query:photo_available', (data: { id: string; photoUrl: string; photos?: any[] }) => {
+      console.log('[Socket.io Client] Nova foto/imagem disponível:', data);
+      setCurrentActiveRecord((prev) => {
+        if (prev && prev.id === data.id) {
+          return { ...prev, photoUrl: data.photoUrl, photos: data.photos || prev.photos };
+        }
+        return prev;
+      });
+      setHistory((prev) =>
+        prev.map((item) =>
+          item.id === data.id
+            ? { ...item, photoUrl: data.photoUrl, photos: data.photos || item.photos }
+            : item
+        )
+      );
     });
 
     // When any query is created (for queue and auto-response)
@@ -206,6 +276,19 @@ export default function App() {
     // When completed globally
     socketInstance.on('query:completed_broadcast', (data: any) => {
       setPendingQueries((prev) => prev.filter((p) => p.id !== data.id));
+      if (data.txtContent) {
+        setCurrentActiveRecord((prev) => {
+          if (prev && prev.id === data.id) {
+            return { ...prev, txtContent: data.txtContent, txtFileName: data.txtFileName };
+          }
+          return prev;
+        });
+        setHistory((prev) =>
+          prev.map((item) =>
+            item.id === data.id ? { ...item, ...data } : item
+          )
+        );
+      }
     });
 
     // When PIX payment is confirmed via UP DEPIX webhook
@@ -225,7 +308,7 @@ export default function App() {
     socketInstance.on('query:error', (err: any) => {
       setIsLoading(false);
       if (autoSimulateTimerRef.current) clearTimeout(autoSimulateTimerRef.current);
-      console.error('Erro ao realizar consulta:', err);
+      console.warn('Aviso na consulta:', err?.error || err);
     });
 
     setSocket(socketInstance);
@@ -246,7 +329,7 @@ export default function App() {
       if (user) {
         console.log('[Firebase Auth] Usuário autenticado:', user.email);
         try {
-          // Garante perfil com Plano Premium e teste de 7 dias
+          // Garante perfil com Plano Premium e teste de 10 consultas (Trial)
           const profile = await syncUserProfile(user);
           setUserProfile(profile);
 
@@ -350,19 +433,49 @@ export default function App() {
     }
   };
 
-  // Handler: Start a search
-  const handleSearch = (moduleType: QueryModuleType, queryParam: string) => {
+  // Handler: Start a search with Cota Check (10 Consultas)
+  const handleSearch = async (moduleType: QueryModuleType, queryParam: string, isProParam?: boolean) => {
     if (!socket || !isConnected) {
       return;
+    }
+
+    // ==============================================================
+    // 1. CHECAGEM DE COTA (LIMITE DE 10 CONSULTAS GRÁTIS)
+    // ==============================================================
+    if (userProfile?.plan === 'trial') {
+      const saldo = userProfile.consultasRestantes || 0;
+      if (saldo <= 0) {
+        // Se zerou, abre a tela de pagamento na hora e BLOQUEIA a busca!
+        setIsPricingModalOpen(true);
+        return; 
+      }
     }
 
     setIsLoading(true);
     setLoadingStepText('Transmitindo solicitação via barramento em tempo real...');
 
+    const isPro = Boolean(isProParam || isProMode || moduleType.startsWith('pro') || moduleType.includes('pro'));
+
     socket.emit('query:request', {
       moduleType,
       queryParam,
+      isPro,
     });
+
+    // ==============================================================
+    // 2. DESCONTA A CONSULTA NO BANCO DE DADOS EM TEMPO REAL
+    // ==============================================================
+    if (currentUser && userProfile?.plan === 'trial') {
+      try {
+        await deduzirConsulta(currentUser.uid);
+        // Atualiza a tela instantaneamente (tira 1 do saldo visual sem recarregar a página)
+        setUserProfile((prev) => 
+          prev ? { ...prev, consultasRestantes: Math.max(0, (prev.consultasRestantes || 1) - 1) } : prev
+        );
+      } catch (err) {
+        console.error('Erro ao deduzir consulta:', err);
+      }
+    }
   };
 
   // Immediate reply shortcut during loading
@@ -422,14 +535,10 @@ export default function App() {
   // Dashboard B2B Protegido — Apenas para usuários autenticados
   return (
     <div className="min-h-screen bg-[#012624] text-[#bbc7c6] flex flex-col font-['DM_Sans',sans-serif] selection:bg-[#00827c]/40 selection:text-[#edfffe]">
-      {/* Top Premium 7-Day Trial Notification Banner */}
+      {/* Top Free Trial Notification Banner */}
       <TrialBanner
-        currentUser={currentUser}
         userProfile={userProfile}
-        onLoginGoogle={handleGoogleLogin}
-        isAuthLoading={isAuthLoading}
         onOpenPricing={() => setIsPricingModalOpen(true)}
-        onOpenProfile={() => setIsProfileModalOpen(true)}
       />
 
       {/* Top Application Header */}
@@ -446,6 +555,7 @@ export default function App() {
         onOpenPricing={() => setIsPricingModalOpen(true)}
         onOpenProfile={() => setIsProfileModalOpen(true)}
         onOpenCode={() => setIsCodeModalOpen(true)}
+        onOpenProModal={() => setIsProModalOpen(true)}
       />
 
       {/* Main Content Body */}
@@ -505,6 +615,8 @@ export default function App() {
               moduleInfo={currentModuleInfo}
               isLoading={isLoading}
               onSearch={handleSearch}
+              isProMode={isProMode}
+              onToggleProMode={setIsProMode}
             />
 
             {/* Realtime Loading / Waiting State */}
@@ -627,6 +739,18 @@ export default function App() {
         errorDetails={authError}
         onRetryLogin={handleGoogleLogin}
         onContinueAsGuest={handleContinueAsGuest}
+      />
+
+      {/* Ecossistema Paralelo BUSCAS PRO Modal */}
+      <ProSearchModal
+        isOpen={isProModalOpen}
+        onClose={() => setIsProModalOpen(false)}
+        userProfile={userProfile}
+        onSearch={(mod, query) => handleSearch(mod, query, true)}
+        isLoading={isLoading}
+        loadingStepText={loadingStepText}
+        activeRecord={currentActiveRecord}
+        onOpenPricing={() => setIsPricingModalOpen(true)}
       />
     </div>
   );

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   Sparkles, 
   Clock, 
@@ -9,7 +9,9 @@ import {
   ChevronRight, 
   X,
   Flame,
-  Crown
+  Crown,
+  AlertTriangle,
+  Search
 } from 'lucide-react';
 import type { User as FirebaseUser } from 'firebase/auth';
 import type { UserProfileData } from '../lib/firebase';
@@ -34,16 +36,10 @@ export const TrialBanner: React.FC<TrialBannerProps> = ({
 }) => {
   const [isDismissed, setIsDismissed] = useState(false);
   const validity = calculateAccountValidity(userProfile);
-
-  const formattedExpirationDate = userProfile?.trialEndsAt
-    ? new Date(userProfile.trialEndsAt).toLocaleDateString('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    : null;
+  
+  const isTrial = userProfile?.plan === 'trial';
+  const saldo = userProfile?.consultasRestantes ?? 0;
+  const isTrialExhausted = isTrial && saldo <= 0;
 
   if (isDismissed) {
     return (
@@ -52,8 +48,10 @@ export const TrialBanner: React.FC<TrialBannerProps> = ({
           <Crown className="w-3.5 h-3.5 text-[#ffd166]" />
           <span>
             {currentUser 
-              ? `${validity.planDisplayName}: ${validity.daysRemaining} dias de acesso restantes (Válido até ${validity.expirationDateFormatted})`
-              : 'Novos clientes: Cadastre-se com o Google e ganhe 7 dias de teste no Plano Premium!'}
+              ? (isTrial 
+                  ? `Teste Grátis: ${saldo} ${saldo === 1 ? 'consulta restante' : 'consultas restantes'}` 
+                  : `${validity.planDisplayName}: ${validity.daysRemaining} dias de acesso restantes (Válido até ${validity.expirationDateFormatted})`)
+              : 'Novos clientes: Cadastre-se com o Google e ganhe 10 consultas grátis no Plano Premium!'}
           </span>
         </div>
         <div className="flex items-center gap-3">
@@ -76,8 +74,80 @@ export const TrialBanner: React.FC<TrialBannerProps> = ({
     );
   }
 
-  // Se o usuário estiver autenticado
+  // =========================================================
+  // USUÁRIO AUTENTICADO
+  // =========================================================
   if (currentUser) {
+    // CENÁRIO 1: TESTE GRÁTIS ESGOTADO (Banner Vermelho de Bloqueio)
+    if (isTrialExhausted) {
+      return (
+        <aside 
+          className="relative bg-gradient-to-r from-rose-950 via-rose-900 to-rose-950 border-b border-rose-500/40 text-rose-100 px-4 sm:px-6 py-2.5 z-40 shadow-sm animate-in fade-in slide-in-from-top-2"
+        >
+          <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+              <span className="text-sm font-medium tracking-tight">
+                Suas consultas gratuitas acabaram. Faça o upgrade para continuar usando o motor de buscas.
+              </span>
+            </div>
+            <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
+              {onOpenPricing && (
+                <button 
+                  onClick={onOpenPricing} 
+                  className="flex items-center gap-1.5 text-xs bg-rose-500 hover:bg-rose-400 text-white px-4 py-1.5 rounded-[6px] font-bold tracking-wide uppercase transition-colors cursor-pointer shadow-md"
+                >
+                  <Crown className="w-3.5 h-3.5" />
+                  <span>Liberar Acesso Ilimitado</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </aside>
+      );
+    }
+
+    // CENÁRIO 2: TESTE GRÁTIS ATIVO (Banner Amarelo)
+    if (isTrial) {
+      return (
+        <aside 
+          className="relative bg-gradient-to-r from-[#012624] via-[#013531] to-[#012624] border-b border-[#ffd166]/40 text-[#edfffe] px-4 sm:px-6 py-2.5 z-40 shadow-sm"
+        >
+          <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] bg-[#ffd166]/15 border border-[#ffd166]/40 text-[#ffd166] text-xs font-mono font-medium tracking-wide">
+                <Search className="w-3.5 h-3.5 text-[#ffd166] animate-pulse" />
+                <span>TESTE GRÁTIS ATIVO</span>
+              </div>
+              <span className="font-medium text-xs sm:text-sm text-[#ffffff] tracking-tight">
+                Você ainda tem <strong className="text-[#ffd166]">{saldo} {saldo === 1 ? 'consulta' : 'consultas'}</strong> gratuitas disponíveis.
+              </span>
+            </div>
+            
+            <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
+              {saldo <= 5 && onOpenPricing && (
+                <button 
+                  onClick={onOpenPricing} 
+                  className="flex items-center gap-1.5 text-xs bg-[#ffd166] hover:bg-[#ffc233] text-[#011d1c] px-3 py-1.5 rounded-[6px] font-bold uppercase transition-colors cursor-pointer shadow-sm"
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  <span>Fazer Upgrade</span>
+                </button>
+              )}
+              <button
+                onClick={() => setIsDismissed(true)}
+                className="text-[#bbc7c6] hover:text-[#ffffff] p-1 rounded hover:bg-[#003734] transition-colors cursor-pointer"
+                title="Ocultar aviso"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </aside>
+      );
+    }
+
+    // CENÁRIO 3: PLANO PAGO (Banner Verde Original)
     return (
       <aside 
         id="trial-premium-top-banner"
@@ -85,7 +155,6 @@ export const TrialBanner: React.FC<TrialBannerProps> = ({
         className="relative bg-gradient-to-r from-[#00302d] via-[#004743] to-[#002e2b] border-b border-[#00827c]/40 text-[#edfffe] px-4 sm:px-6 py-2.5 z-40 shadow-sm"
       >
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
-          {/* Lado Esquerdo: Tag do Plano e Validade */}
           <div className="flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] bg-[#ffd166]/15 border border-[#ffd166]/40 text-[#ffd166] text-xs font-mono font-medium tracking-wide">
               <Crown className="w-3.5 h-3.5 text-[#ffd166] animate-pulse" />
@@ -114,7 +183,6 @@ export const TrialBanner: React.FC<TrialBannerProps> = ({
             </span>
           </div>
 
-          {/* Lado Direito: Vantagens Ativas & Fechar */}
           <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end text-xs">
             <div className="hidden sm:flex items-center gap-3 text-[11px] text-[#edfffe] font-mono">
               <span className="flex items-center gap-1 text-[#cbfffc]">
@@ -152,8 +220,9 @@ export const TrialBanner: React.FC<TrialBannerProps> = ({
     );
   }
 
-  // Se o usuário ainda NÃO estiver autenticado:
-  // Chama a atenção de novos clientes para se cadastrarem e ganharem o teste de 7 dias
+  // =========================================================
+  // USUÁRIO DESLOGADO (Promoção para Cadastro)
+  // =========================================================
   return (
     <aside 
       id="trial-premium-registration-banner"
@@ -168,7 +237,7 @@ export const TrialBanner: React.FC<TrialBannerProps> = ({
           </div>
 
           <p className="text-xs sm:text-sm text-[#ffffff]">
-            Registre-se com o Google e ganhe o <strong className="text-[#ffd166]">Plano Premium</strong> com <strong className="text-[#cbfffc] underline decoration-[#00827c]">teste grátis válido por 7 dias</strong>!
+            Registre-se com o Google e ganhe o <strong className="text-[#ffd166]">Plano Premium</strong> com <strong className="text-[#cbfffc] underline decoration-[#00827c]">10 consultas grátis</strong>!
           </p>
         </div>
 
@@ -180,7 +249,7 @@ export const TrialBanner: React.FC<TrialBannerProps> = ({
             className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-[6px] bg-[#cbfffc] hover:bg-[#a5fbf8] text-[#012624] font-medium text-xs tracking-wide uppercase font-mono transition-all cursor-pointer shadow-sm hover:scale-[1.02]"
           >
             <LogIn className="w-3.5 h-3.5" />
-            <span>Ativar Teste de 7 Dias</span>
+            <span>Ativar Teste (10 Consultas)</span>
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
 

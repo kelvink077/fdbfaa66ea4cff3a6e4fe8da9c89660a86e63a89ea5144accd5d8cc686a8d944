@@ -13,7 +13,8 @@ import {
   CreditCard, 
   ArrowUpRight,
   Zap,
-  Layers
+  Layers,
+  Search
 } from 'lucide-react';
 import type { User as FirebaseUser } from 'firebase/auth';
 import type { UserProfileData } from '../lib/firebase';
@@ -39,6 +40,19 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   if (!isOpen || !currentUser) return null;
 
   const validity = calculateAccountValidity(userProfile);
+  
+  // Lógica inteligente para alternar entre "Consultas" (Teste) e "Dias" (Pago)
+  const isTrial = userProfile?.plan === 'trial';
+  const saldo = userProfile?.consultasRestantes ?? 0;
+  
+  const isActuallyValid = isTrial ? saldo > 0 : validity.isValid;
+  const statusBadgeText = isTrial 
+    ? (saldo > 0 ? '● Teste Ativo' : '● Esgotado') 
+    : (validity.isValid ? '● Acesso Liberado' : '● Expirado');
+
+  const progressBarWidth = isTrial
+    ? Math.min(100, Math.max(5, (saldo / 10) * 100))
+    : Math.min(100, Math.max(5, (validity.daysRemaining / 30) * 100));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-[#011413]/90 backdrop-blur-md overflow-y-auto">
@@ -81,7 +95,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 {currentUser.displayName || 'Operador Shazam'}
               </h3>
               <span className="px-2 py-0.5 rounded-[4px] bg-[#ffd166]/15 border border-[#ffd166]/40 text-[#ffd166] text-[10px] font-mono font-semibold uppercase tracking-wider flex items-center gap-1">
-                <Crown className="w-3 h-3 text-[#ffd166]" />
+                {isTrial ? <Search className="w-3 h-3 text-[#ffd166]" /> : <Crown className="w-3 h-3 text-[#ffd166]" />}
                 {validity.planDisplayName}
               </span>
             </div>
@@ -107,16 +121,16 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 text-[#cbfffc]" />
               <span className="text-xs font-mono font-semibold text-[#cbfffc] uppercase tracking-wider">
-                Validade da Conta
+                {isTrial ? 'Saldo de Consultas' : 'Validade da Conta'}
               </span>
             </div>
 
             <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold tracking-wider uppercase border ${
-              validity.isValid 
+              isActuallyValid 
                 ? 'bg-emerald-950/70 text-emerald-300 border-emerald-500/40'
                 : 'bg-rose-950/70 text-rose-300 border-rose-500/40'
             }`}>
-              {validity.isValid ? '● Acesso Liberado' : '● Expirado'}
+              {statusBadgeText}
             </span>
           </div>
 
@@ -124,18 +138,20 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           <div className="my-4">
             <div className="flex items-baseline gap-2">
               <span className="text-3xl sm:text-4xl font-mono font-bold text-[#ffffff] tracking-tight">
-                {validity.daysRemaining}
+                {isTrial ? saldo : validity.daysRemaining}
               </span>
               <span className="text-sm font-mono text-[#cbfffc] uppercase tracking-wider">
-                {validity.daysRemaining === 1 ? 'dia restante' : 'dias restantes'}
+                {isTrial 
+                  ? (saldo === 1 ? 'consulta restante' : 'consultas restantes')
+                  : (validity.daysRemaining === 1 ? 'dia restante' : 'dias restantes')}
               </span>
             </div>
 
             {/* Visual progress bar */}
             <div className="w-full h-2 rounded-full bg-[#012624] border border-[#00827c]/40 mt-3 overflow-hidden">
               <div 
-                className="h-full bg-gradient-to-r from-[#00827c] via-[#79fbf5] to-[#cbfffc] rounded-full transition-all duration-500"
-                style={{ width: `${Math.min(100, Math.max(5, (validity.daysRemaining / 30) * 100))}%` }}
+                className={`h-full rounded-full transition-all duration-500 ${isActuallyValid ? 'bg-gradient-to-r from-[#00827c] via-[#79fbf5] to-[#cbfffc]' : 'bg-rose-500'}`}
+                style={{ width: `${progressBarWidth}%` }}
               ></div>
             </div>
           </div>
@@ -143,7 +159,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           {/* Details list */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 text-xs border-t border-[#00827c]/30 font-mono">
             <div>
-              <span className="text-[#707777] block text-[10px] uppercase">Data Exata de Expiração</span>
+              <span className="text-[#707777] block text-[10px] uppercase">Data de Expiração</span>
               <span className="text-[#ffffff] font-semibold flex items-center gap-1.5 mt-0.5">
                 <Calendar className="w-3.5 h-3.5 text-[#cbfffc]" />
                 {validity.expirationDateFormatted}
@@ -151,7 +167,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             </div>
 
             <div>
-              <span className="text-[#707777] block text-[10px] uppercase">Status Atual</span>
+              <span className="text-[#707777] block text-[10px] uppercase">Status do Plano</span>
               <span className="text-[#edfffe] font-medium flex items-center gap-1.5 mt-0.5">
                 <ShieldCheck className="w-3.5 h-3.5 text-[#ffd166]" />
                 {validity.statusText}
@@ -203,7 +219,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             className="w-full py-3 px-4 rounded-[8px] bg-gradient-to-r from-[#ffd166] to-[#ffdc85] hover:opacity-95 text-[#012624] font-bold text-xs font-mono uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 shadow-md hover:scale-[1.01]"
           >
             <Zap className="w-4 h-4 text-[#012624]" />
-            <span>Renovar ou Adicionar Mais Dias (Via PIX)</span>
+            <span>{isTrial ? 'Assinar Plano Premium (Via PIX)' : 'Renovar ou Adicionar Mais Dias (Via PIX)'}</span>
             <ArrowUpRight className="w-4 h-4 text-[#012624]" />
           </button>
 

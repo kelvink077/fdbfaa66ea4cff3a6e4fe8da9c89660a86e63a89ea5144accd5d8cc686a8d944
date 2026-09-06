@@ -159,7 +159,125 @@ DDD / REGIÃO: 11 - São Paulo (Região Metropolitana)
 - Titular: JULIANA B. C. SANTOS
 - CPF Parcial: 528.***.***-88
 - Score de Confiança do Número: 96/100 (Uso Pessoal Ativo e Recorrente)
-- WhatsApp: CONECTADO (Foto de perfil e Bio pública ativas)`
+- WhatsApp: CONECTADO (Foto de perfil e Bio pública ativas)`,
+
+  pro_cpf: `💎 [BUSCAS PRO - DOSSIÊ DE INTELIGÊNCIA CPF VIP]
+=========================================
+CPF: 021.575.756-42
+NOME: MARCOS AURÉLIO BEZERRA DA COSTA
+SITUAÇÃO RFB: REGULAR | DIGITO: VÁLIDO (OK)
+DATA NASCIMENTO: 18/05/1982 (44 anos)
+MÃE: FRANCISCA BEZERRA DA COSTA
+PAI: JOSÉ AURÉLIO DA COSTA
+RENDA PRESUMIDA: R$ 22.450,00 | SCORE: 915/1000
+PODER AQUISITIVO: CLASSE A | RISCO: BAIXO
+VÍNCULOS EMPREGATÍCIOS: ATIVO (CLT/DIRETORIA)
+BENS DECLARADOS: 3 IMÓVEIS, 2 VEÍCULOS
+PROCESSO JUDICIAL: NADA CONSTA (CÍVEL/CRIMINAL)`,
+
+  pro_telefone: `💎 [BUSCAS PRO - TELEFONIA AVANÇADA VIP]
+=========================================
+NÚMERO: (11) 99874-1234
+OPERADORA: CLARO S.A. (Rede 5G Ativa)
+PORTABILIDADE: Realizada de TIM para CLARO em 2024
+TITULAR: MARCOS AURÉLIO BEZERRA DA COSTA
+CPF TITULAR: 021.575.756-42
+ENDEREÇO DE COBRANÇA: Av. Brigadeiro Faria Lima, 1485, Pinheiros - SP
+WHATSAPP STATUS: ATIVO COM FOTO SINCRONIZADA
+GEOLOCALIZAÇÃO ESTIMADA: São Paulo / SP`,
+
+  pro_nome: `💎 [BUSCAS PRO - VARREDURA NACIONAL POR NOME]
+=========================================
+ALVO: MARCOS AURÉLIO BEZERRA DA COSTA
+HOMÔNIMOS LOCALIZADOS: 2
+1. CPF: 021.575.756-42 | NASC: 18/05/1982 | MÃE: FRANCISCA BEZERRA | UF: SP
+2. CPF: 894.120.332-15 | NASC: 04/11/1990 | MÃE: MARIA DE LOURDES | UF: CE
+HISTÓRICO ELEITORAL: SÃO PAULO/SP - ZONA 001 SEÇÃO 0142
+PARENTESCOS DIRETOS: 4 FAMILIARES IDENTIFICADOS`,
+
+  pro_email: `💎 [BUSCAS PRO - INVESTIGAÇÃO DE E-MAIL & BREACHES]
+=========================================
+E-MAIL: m.aurelio.costa@empresa.com.br
+DOMÍNIO: empresa.com.br (Ativo / MX Google Cloud)
+TITULAR VINCULADO: Marcos Aurélio Bezerra da Costa
+VAZAMENTOS CONFIRMADOS: 2 bases históricas
+CHAVE HASH MD5/SHA256: Localizada
+REDES SOCIAIS IDENTIFICADAS: LinkedIn, GitHub, X (Twitter)`,
+
+  pro_endereco: `💎 [BUSCAS PRO - CRUZAMENTO DE ENDEREÇO & MORADORES]
+=========================================
+LOGRADOURO: Alameda Santos, 1200, Apto 114
+BAIRRO: Cerqueira César | CIDADE: São Paulo - SP | CEP: 01418-100
+TIPO: RESIDENCIAL MULTIFAMILIAR
+MORADORES IDENTIFICADOS NO IMÓVEL:
+1. MARCOS AURÉLIO BEZERRA DA COSTA (CPF: 021.***.***-42)
+2. PATRICIA ALBUQUERQUE COSTA (CPF: 318.***.***-10)
+LINHAS TELEFÔNICAS VINCULADAS AO ENDEREÇO: 2`,
+
+  pro_cep: `💎 [BUSCAS PRO - GEO CEP & LOGRADOURO COMPLETO]
+=========================================
+CEP: 01418-100
+LOGRADOURO: Alameda Santos
+BAIRRO: Cerqueira César | ZONA: Central / Sul
+CIDADE: São Paulo | UF: SP
+CÓDIGO IBGE: 3550308 | DDD: 11
+EMPRESAS ATIVAS NO CEP: 48 estabelecimentos
+FIBRA / REDE MÓVEL: Cobertura total 5G`,
+
+  pro_cnpj: `💎 [BUSCAS PRO - DOSSIÊ EMPRESARIAL QSA VIP]
+=========================================
+CNPJ: 14.882.901/0001-44
+RAZÃO SOCIAL: COSTA & ALBUQUERQUE TECNOLOGIA LTDA
+NOME FANTASIA: NEXUS INTEL CORP
+SITUAÇÃO CADASTRAL: ATIVA (RFB)
+DATA DE ABERTURA: 12/03/2018 (8 anos)
+CAPITAL SOCIAL: R$ 1.500.000,00
+CNAE: 62.01-5-01 - Desenvolvimento de programas de computador sob encomenda
+QUADRO SOCIETÁRIO (QSA):
+- Marcos Aurélio Bezerra da Costa (Sócio-Administrador - 70%)
+- Patricia Albuquerque Costa (Sócia - 30%)
+DÍVIDA ATIVA DA UNIÃO: NADA CONSTA (Certidão Negativa Emitida)`,
+
+  pro_titulo: `💎 [BUSCAS PRO - TÍTULO DE ELEITOR & SITUAÇÃO]
+=========================================
+TÍTULO: 3418.9012.0142
+NOME: MARCOS AURÉLIO BEZERRA DA COSTA
+SITUAÇÃO ELEITORAL: REGULAR / APTO A VOTAR
+BIOMETRIA: CADASTRADA (COLETADA)
+ZONA ELEITORAL: 001 | SEÇÃO: 0142
+MUNICÍPIO / UF: SÃO PAULO / SP
+LOCAL DE VOTAÇÃO: COLÉGIO DANTE ALIGHIERI`,
+
+  pro_mae: `💎 [BUSCAS PRO - FILIAÇÃO & VÍNCULO MATERNO CRUZADO]
+=========================================
+NOME DA MÃE: FRANCISCA BEZERRA DA COSTA
+DATA NASCIMENTO ESTIMADA: 09/02/1958
+CPF ESTIMADO: 119.***.***-00 | SITUAÇÃO: REGULAR
+FILHOS REGISTRADOS VINCULADOS:
+1. MARCOS AURÉLIO BEZERRA DA COSTA (CPF: 021.***.***-42)
+2. RENATA BEZERRA DA COSTA (CPF: 248.***.***-91)
+ÚLTIMO ENDEREÇO CONHECIDO: São Paulo/SP`,
+
+  pro_foto: `💎 [BUSCAS PRO - BIOMETRIA FACIAL & REGISTRO FOTOGRÁFICO]
+=========================================
+ALVO: MARCOS AURÉLIO BEZERRA DA COSTA | CPF: 021.575.756-42
+REGISTRO BIOMÉTRICO: LOCALIZADO NA BASE NACIONAL (DNI / CNH DIGITAL)
+CONFORMIDADE FACIAL: 98.7% (MATCH CONFIRMADO)
+ÓRGÃO EMISSOR: DETRAN-SP / SENATRAN
+ÚLTIMA FOTO ATUALIZADA: 2024
+STATUS: DOCUMENTO VÁLIDO E AUTENTICADO`,
+
+  pro_placa: `💎 [BUSCAS PRO - HISTÓRICO VEICULAR PRO DETRAN]
+=========================================
+PLACA: RTO9F22 (Mercosul) | PLACA ANTERIOR: RTO-9522
+MARCA / MODELO: PORSCHE MACAN 2.0 TURBO
+ANO FABRICAÇÃO / MODELO: 2023 / 2024
+CHASSI: WP1AA2954LLB9**** | RENAVAM: 01289471023
+COR: CINZA VULCANO | POTÊNCIA: 265 CV
+PROPRIETÁRIO ATUAL: COSTA & ALBUQUERQUE TECNOLOGIA LTDA
+GRAVAME: QUITADO (SEM RESTRIÇÃO FINANCEIRA)
+SITUAÇÃO ROUBO/FURTO: NADA CONSTA
+DÉBITOS / MULTAS: NENHUM DÉBITO PENDENTE`
 };
 
 /**
@@ -170,22 +288,38 @@ export function getSampleResponseForQuery(moduleType: QueryModuleType, queryPara
   const { cleanParam, formattedParam } = getTelegramCommand(moduleType, queryParam);
 
   let adapted = base;
-  if (moduleType === 'cpf_1') {
-    adapted = adapted.replace(/341\.892\.518-20/g, formattedParam || cleanParam);
+  if (moduleType === 'cpf_1' || moduleType === 'pro_cpf') {
+    adapted = adapted.replace(/341\.892\.518-20/g, formattedParam || cleanParam)
+                     .replace(/021\.575\.756-42/g, formattedParam || cleanParam);
   } else if (moduleType === 'cpf_2') {
     adapted = adapted.replace(/528\.190\.432-88/g, formattedParam || cleanParam);
   } else if (moduleType === 'cpf_3') {
     adapted = adapted.replace(/912\.445\.871-04/g, formattedParam || cleanParam);
-  } else if (moduleType === 'cnpj') {
-    adapted = adapted.replace(/18\.236\.120\/0001-58/g, formattedParam || cleanParam);
-  } else if (moduleType === 'telefone') {
-    adapted = adapted.replace(/\(11\) 98452-1920/g, formattedParam || cleanParam);
-  } else if (moduleType === 'placa') {
-    adapted = adapted.replace(/BRA9F22/g, cleanParam.toUpperCase());
-  } else if (moduleType === 'email') {
-    adapted = adapted.replace(/target\.user@corporativo\.com\.br/g, cleanParam);
-  } else if (moduleType === 'nome') {
-    adapted = adapted.replace(/MARCOS AURELIO DA SILVA PEREIRA/g, cleanParam.toUpperCase());
+  } else if (moduleType === 'cnpj' || moduleType === 'pro_cnpj') {
+    adapted = adapted.replace(/18\.236\.120\/0001-58/g, formattedParam || cleanParam)
+                     .replace(/14\.882\.901\/0001-44/g, formattedParam || cleanParam);
+  } else if (moduleType === 'telefone' || moduleType === 'pro_telefone') {
+    adapted = adapted.replace(/\(11\) 98452-1920/g, formattedParam || cleanParam)
+                     .replace(/\(11\) 99874-1234/g, formattedParam || cleanParam);
+  } else if (moduleType === 'placa' || moduleType === 'pro_placa') {
+    adapted = adapted.replace(/BRA9F22/g, cleanParam.toUpperCase())
+                     .replace(/RTO9F22/g, cleanParam.toUpperCase());
+  } else if (moduleType === 'email' || moduleType === 'pro_email') {
+    adapted = adapted.replace(/target\.user@corporativo\.com\.br/g, cleanParam)
+                     .replace(/m\.aurelio\.costa@empresa\.com\.br/g, cleanParam);
+  } else if (moduleType === 'nome' || moduleType === 'pro_nome') {
+    adapted = adapted.replace(/MARCOS AURELIO DA SILVA PEREIRA/g, cleanParam.toUpperCase())
+                     .replace(/MARCOS AURÉLIO BEZERRA DA COSTA/g, cleanParam.toUpperCase());
+  } else if (moduleType === 'pro_cep') {
+    adapted = adapted.replace(/01418-100/g, formattedParam || cleanParam);
+  } else if (moduleType === 'pro_endereco') {
+    adapted = adapted.replace(/Alameda Santos, 1200, Apto 114/g, cleanParam);
+  } else if (moduleType === 'pro_titulo') {
+    adapted = adapted.replace(/3418\.9012\.0142/g, cleanParam);
+  } else if (moduleType === 'pro_mae') {
+    adapted = adapted.replace(/FRANCISCA BEZERRA DA COSTA/g, cleanParam.toUpperCase());
+  } else if (moduleType === 'pro_foto') {
+    adapted = adapted.replace(/021\.575\.756-42/g, formattedParam || cleanParam);
   }
 
   return adapted;
@@ -218,10 +352,47 @@ export function parseIntelligenceResponse(
 
   const lines = sanitizedText.split('\n').map((l) => l.trim()).filter(Boolean);
   
+  const isNotFound = 
+    exactMatch.status === 'not_found' ||
+    exactMatch.isNegativeReported === true ||
+    /n[ãa]o encontrado|nao encontrado|nada consta|n[ãa]o localizado|nenhum registro|❌/i.test(sanitizedText);
+
+  if (isNotFound) {
+    const notFoundSections: ParsedIntelligenceReport['sections'] = [{
+      title: 'Resultado Oficial da Base',
+      items: [
+        { label: 'Status da Pesquisa', value: '❌ NÃO ENCONTRADO', highlight: true, status: 'danger' },
+        { label: 'Parâmetro Consultado', value: queryParam, highlight: true },
+        { label: 'Comando Telegram', value: telegramCommand },
+        { label: 'Retorno da Base', value: '❌ Não encontrado.', status: 'danger' },
+        { label: 'Diagnóstico', value: 'O alvo consultado não possui vínculos, registros ativos ou histórico cadastrado nas bases consultadas.' },
+      ],
+    }];
+
+    return {
+      title: `Consulta Concluída - Registro Não Encontrado (${moduleType.toUpperCase()})`,
+      target: queryParam,
+      module: moduleType.toUpperCase(),
+      telegramCommand,
+      exactMatch: {
+        ...exactMatch,
+        hasExactMatch: false,
+        status: 'not_found',
+        statusLabel: 'Nenhum Registro Encontrado (❌ Não encontrado.)',
+        statusBadgeColor: 'red',
+        isNegativeReported: true,
+      },
+      riskLevel: 'Crítico',
+      summary: `A central de inteligência respondeu "❌ Não encontrado." Não constam registros cadastrados nos órgãos oficiais para o alvo informado.`,
+      sections: notFoundSections,
+      alerts: ['A pesquisa retornou "❌ Não encontrado." Não constam dados para o alvo informado.'],
+      rawText,
+    };
+  }
+
   let title = `Relatório de Inteligência - ${moduleType.toUpperCase()}`;
   let summary = exactMatch.details;
-  let riskLevel: 'Baixo' | 'Médio' | 'Alto' | 'Crítico' | 'Regular' = 
-    exactMatch.status === 'not_found' ? 'Crítico' : 'Regular';
+  let riskLevel: 'Baixo' | 'Médio' | 'Alto' | 'Crítico' | 'Regular' = 'Regular';
   let score: number | undefined = undefined;
   const alerts: string[] = [];
   const sections: ParsedIntelligenceReport['sections'] = [];

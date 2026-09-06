@@ -19,7 +19,9 @@ import {
   orderBy, 
   limit, 
   getDocs,
-  serverTimestamp 
+  serverTimestamp,
+  updateDoc,
+  increment
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -56,7 +58,7 @@ export interface UserProfileData {
   email: string;
   displayName: string;
   photoURL: string;
-  plan: 'premium' | 'weekly' | 'biweekly' | 'monthly' | 'free' | 'enterprise';
+  plan: 'premium' | 'weekly' | 'biweekly' | 'monthly' | 'free' | 'enterprise' | 'trial';
   planName?: string;
   planStatus: 'trial' | 'active' | 'expired';
   trialStartedAt: string;
@@ -64,6 +66,7 @@ export interface UserProfileData {
   validUntil: string;
   trialDaysTotal: number;
   totalDaysCredited?: number;
+  consultasRestantes?: number; // Cota de consultas grátis
   createdAt: string;
   lastLoginAt: string;
   recentPayments?: UserPaymentRecord[];
@@ -114,13 +117,14 @@ export function calculateAccountValidity(profile?: UserProfileData | null): {
   if (profile.plan === 'weekly') planDisplayName = 'Plano Semanal (7 Dias)';
   else if (profile.plan === 'biweekly') planDisplayName = 'Plano 15 Dias';
   else if (profile.plan === 'monthly') planDisplayName = 'Plano Mensal (30 Dias)';
+  else if (profile.plan === 'trial') planDisplayName = 'Teste Grátis (10 Consultas)';
   else if (profile.planName) planDisplayName = profile.planName;
 
   let statusText = 'Ativo';
   if (isExpired) {
     statusText = 'Assinatura Expirada';
   } else if (isTrial && profile.planStatus === 'trial') {
-    statusText = `Teste Grátis (${daysRemaining}d restantes)`;
+    statusText = `Teste Grátis (${profile.consultasRestantes || 0} consultas restantes)`;
   } else {
     statusText = `Plano Ativo (${daysRemaining}d restantes)`;
   }
@@ -147,7 +151,7 @@ export function calculateAccountValidity(profile?: UserProfileData | null): {
 }
 
 /**
- * Sincroniza e garante o plano com teste de 7 dias para novos clientes ou recupera validade
+ * Sincroniza e garante o plano com teste grátis (10 consultas) para novos clientes
  */
 export async function syncUserProfile(user: User): Promise<UserProfileData> {
   const userRef = doc(db, 'users', user.uid);
@@ -160,20 +164,21 @@ export async function syncUserProfile(user: User): Promise<UserProfileData> {
     if (docSnap.exists()) {
       const existing = docSnap.data() as Partial<UserProfileData>;
       
-      const trialEndsAt = existing.validUntil || existing.trialEndsAt || new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      const trialEndsAt = existing.validUntil || existing.trialEndsAt || new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString();
       const updatedProfile: UserProfileData = {
         id: user.uid,
         email: user.email || existing.email || '',
         displayName: user.displayName || existing.displayName || 'Operador',
         photoURL: user.photoURL || existing.photoURL || '',
-        plan: existing.plan || 'premium',
-        planName: existing.planName || 'Plano Shazam Premium',
+        plan: existing.plan || 'trial',
+        planName: existing.planName || 'Teste Grátis',
         planStatus: existing.planStatus || 'trial',
         trialStartedAt: existing.trialStartedAt || nowIso,
         trialEndsAt: trialEndsAt,
         validUntil: existing.validUntil || trialEndsAt,
         trialDaysTotal: existing.trialDaysTotal || 7,
-        totalDaysCredited: existing.totalDaysCredited || 7,
+        totalDaysCredited: existing.totalDaysCredited || 0,
+        consultasRestantes: existing.consultasRestantes !== undefined ? existing.consultasRestantes : 10,
         createdAt: existing.createdAt || nowIso,
         lastLoginAt: nowIso,
         recentPayments: existing.recentPayments || [],
@@ -182,21 +187,22 @@ export async function syncUserProfile(user: User): Promise<UserProfileData> {
       await setDoc(userRef, { lastLoginAt: nowIso }, { merge: true });
       return updatedProfile;
     } else {
-      // Novo cliente cadastrado com o Google: ganha Plano Premium com 7 dias de teste grátis
-      const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      // Novo cliente cadastrado com o Google: ganha Plano Trial com 10 Consultas
+      const longExpiration = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString();
       const newProfile: UserProfileData = {
         id: user.uid,
         email: user.email || '',
         displayName: user.displayName || 'Operador',
         photoURL: user.photoURL || '',
-        plan: 'premium',
-        planName: 'Teste Grátis 7 Dias (Premium)',
+        plan: 'trial',
+        planName: 'Teste Grátis (10 Consultas)',
         planStatus: 'trial',
         trialStartedAt: nowIso,
-        trialEndsAt: sevenDaysLater,
-        validUntil: sevenDaysLater,
+        trialEndsAt: longExpiration,
+        validUntil: longExpiration,
         trialDaysTotal: 7,
-        totalDaysCredited: 7,
+        totalDaysCredited: 0,
+        consultasRestantes: 10, // DEFINE AS 10 CONSULTAS AQUI
         createdAt: nowIso,
         lastLoginAt: nowIso,
         recentPayments: [],
@@ -207,20 +213,21 @@ export async function syncUserProfile(user: User): Promise<UserProfileData> {
     }
   } catch (err) {
     console.warn('[Firebase] Erro ao sincronizar perfil do usuário no Firestore:', err);
-    const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const longExpiration = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString();
     return {
       id: user.uid,
       email: user.email || '',
       displayName: user.displayName || 'Operador',
       photoURL: user.photoURL || '',
-      plan: 'premium',
-      planName: 'Teste Grátis 7 Dias (Premium)',
+      plan: 'trial',
+      planName: 'Teste Grátis (10 Consultas)',
       planStatus: 'trial',
       trialStartedAt: nowIso,
-      trialEndsAt: sevenDaysLater,
-      validUntil: sevenDaysLater,
+      trialEndsAt: longExpiration,
+      validUntil: longExpiration,
       trialDaysTotal: 7,
-      totalDaysCredited: 7,
+      totalDaysCredited: 0,
+      consultasRestantes: 10,
       createdAt: nowIso,
       lastLoginAt: nowIso,
       recentPayments: [],
@@ -268,7 +275,6 @@ export async function creditUserPlanValidity(
       const existingExpiry = existingProfile.validUntil || existingProfile.trialEndsAt;
       if (existingExpiry) {
         const parsedExisting = new Date(existingExpiry);
-        // Se a data existente ainda estiver no futuro, soma os dias a partir dela!
         if (parsedExisting.getTime() > now.getTime()) {
           baseDate = parsedExisting;
         }
@@ -307,6 +313,7 @@ export async function creditUserPlanValidity(
       validUntil: newExpiryIso,
       trialDaysTotal: (existingProfile.trialDaysTotal || 7),
       totalDaysCredited: (existingProfile.totalDaysCredited || 0) + daysToAdd,
+      consultasRestantes: existingProfile.consultasRestantes, // Mantém o histórico
       createdAt: existingProfile.createdAt || nowIso,
       lastLoginAt: nowIso,
       recentPayments: updatedPayments,
@@ -314,7 +321,6 @@ export async function creditUserPlanValidity(
 
     await setDoc(userRef, updatedProfile, { merge: true });
 
-    // Registra na subcoleção e coleção geral de pagamentos
     try {
       await addDoc(collection(db, 'users', userId, 'payments'), {
         ...paymentRecord,
@@ -333,7 +339,6 @@ export async function creditUserPlanValidity(
     return updatedProfile;
   } catch (err) {
     console.error('[Firebase] Erro ao creditar validade do usuário:', err);
-    // Fallback gracioso
     const fallbackExpiry = new Date(now.getTime() + daysToAdd * 24 * 60 * 60 * 1000).toISOString();
     return {
       id: userId,
@@ -369,7 +374,6 @@ export async function loginWithGoogle(): Promise<{ user: User; profile: UserProf
     const currentDomain = typeof window !== 'undefined' ? window.location.hostname : '';
     console.error('[Firebase Auth] Erro ao autenticar via Google:', err?.code, err?.message);
     
-    // Attach diagnostic domain information
     err.detectedDomain = currentDomain;
     if (err.code === 'auth/unauthorized-domain' || err.message?.includes('unauthorized-domain')) {
       err.friendlyMessage = `O domínio "${currentDomain}" ainda não está na lista de Domínios Autorizados no Firebase Console.`;
@@ -383,7 +387,7 @@ export async function loginWithGoogle(): Promise<{ user: User; profile: UserProf
  */
 export function createGuestOperatorUser(): { user: any; profile: UserProfileData } {
   const now = new Date();
-  const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const longExpiration = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString();
   const guestId = 'guest_' + Math.random().toString(36).substring(2, 9);
   
   const mockUser: any = {
@@ -399,14 +403,15 @@ export function createGuestOperatorUser(): { user: any; profile: UserProfileData
     email: 'operador.demo@shazam.terminal',
     displayName: 'Operador Convidado (Modo Teste)',
     photoURL: '',
-    plan: 'premium',
-    planName: 'Teste Grátis 7 Dias (Premium)',
+    plan: 'trial',
+    planName: 'Teste Grátis (10 Consultas)',
     planStatus: 'trial',
     trialStartedAt: now.toISOString(),
-    trialEndsAt: sevenDaysLater,
-    validUntil: sevenDaysLater,
+    trialEndsAt: longExpiration,
+    validUntil: longExpiration,
     trialDaysTotal: 7,
-    totalDaysCredited: 7,
+    totalDaysCredited: 0,
+    consultasRestantes: 10,
     createdAt: now.toISOString(),
     lastLoginAt: now.toISOString(),
     recentPayments: [],
@@ -461,10 +466,8 @@ export async function saveConsultaToFirestore(consulta: {
       telegram_msg_id: consulta.telegram_msg_id || null,
     };
 
-    // Save in global consultas
     const docRef = await addDoc(collection(db, 'consultas'), consultaPayload);
 
-    // Also save in user's subcollection for isolated history & quick filtering
     try {
       await addDoc(collection(db, 'users', user.uid, 'consultas'), {
         ...consultaPayload,
@@ -501,5 +504,20 @@ export async function fetchUserHistoryFromFirestore(userId: string) {
   } catch (err: any) {
     console.warn('[Firestore] Erro ao buscar histórico de consultas:', err?.message || err);
     return [];
+  }
+}
+
+/**
+ * Deduz 1 consulta do saldo do usuário no Firestore (Apenas para usuários Trial)
+ */
+export async function deduzirConsulta(uid: string): Promise<void> {
+  try {
+    const userRef = doc(db, 'users', uid);
+    await updateDoc(userRef, {
+      consultasRestantes: increment(-1)
+    });
+  } catch (err) {
+    console.error('[Firestore] Erro ao deduzir consulta:', err);
+    throw err;
   }
 }

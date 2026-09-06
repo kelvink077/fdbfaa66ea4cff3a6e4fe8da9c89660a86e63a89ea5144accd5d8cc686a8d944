@@ -1,12 +1,16 @@
 export const STANDALONE_CODES = {
   serverJs: `// ==========================================
-// BACKEND: server.js (Node.js + Express + Socket.io + Shazam Buscas Gateway)
+// BACKEND: server.js (Node.js + Express + Socket.io + GramJS MTProto Gateway)
+// Roteamento Dual: Base Padrão (-5561626311) e MODO PRO (@Hgliopk00bot)
 // ==========================================
-const express = require('express');
-const http = require('http');
-const cors = require('cors');
-const { Server } = require('socket.io');
-require('dotenv').config();
+import express from 'express';
+import http from 'http';
+import cors from 'cors';
+import { Server } from 'socket.io';
+import { TelegramClient, Api } from 'telegram';
+import { StringSession } from 'telegram/sessions/index.js';
+import dotenv from 'dotenv';
+dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
@@ -15,129 +19,179 @@ const io = new Server(server, {
 });
 
 const PORT = process.env.PORT || 3000;
+const TELEGRAM_API_ID = Number(process.env.TELEGRAM_API_ID) || 0;
+const TELEGRAM_API_HASH = process.env.TELEGRAM_API_HASH || '';
+const TELEGRAM_STRING_SESSION = process.env.TELEGRAM_STRING_SESSION || '';
+const TELEGRAM_CHAT_ID_OLD = process.env.TELEGRAM_CHAT_ID || '-5561626311';
+const TELEGRAM_CHAT_ID_PRO = '@Hgliopk00bot';
+const TARGET_BOT_PRO_ID_NUM = '7565502829';
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public'));
 
-// Mapa para associar Requisições com Socket IDs
-const activeRequests = new Map();
-const msgToRequestMap = new Map(); // key: telegramMessageId, value: requestId
+const activeQueries = new Map();
+const queryByTelegramMsgId = new Map();
+let userbotClient = null;
+let cachedProBotPeer = null;
 
-// Nomes amigáveis dos módulos
-const MODULES = {
-  cpf_1: 'CPF 1 (Consulta Básica)',
-  cpf_2: 'CPF 2 (Consulta Intermediária)',
-  cpf_3: 'CPF 3 (Consulta Avançada)',
-  cnpj: 'CNPJ',
-  nome: 'NOME',
-  email: 'E-MAIL',
-  placa: 'PLACA',
-  telefone: 'TELEFONE'
-};
+// Sanitização estrita de comandos: NUNCA envia /procpf ou /protelefone, sempre /cpf ou /telefone
+function sanitizeCommand(moduleType, queryParam) {
+  const raw = (moduleType || '').toLowerCase();
+  const isPro = raw.startsWith('pro');
+  const mod = raw.replace(/^pro_?/, '').replace(/[^a-z0-9_]/g, '');
+  let cmd = '/cpf1';
+  let clean = (queryParam || '').trim();
 
-// Conexões WebSocket
+  if (raw === 'cpf_1' || raw === 'cpf1' || (!isPro && mod === 'cpf1')) { cmd = '/cpf1'; clean = clean.replace(/\\D/g, ''); }
+  else if (raw === 'cpf_2' || raw === 'cpf2' || (!isPro && mod === 'cpf2')) { cmd = '/cpf2'; clean = clean.replace(/\\D/g, ''); }
+  else if (raw === 'cpf_3' || raw === 'cpf3' || (!isPro && mod === 'cpf3')) { cmd = '/cpf3'; clean = clean.replace(/\\D/g, ''); }
+  else if (isPro && mod.includes('cpf')) { cmd = '/cpf'; clean = clean.replace(/\\D/g, ''); }
+  else if (mod.includes('cpf')) { cmd = '/cpf1'; clean = clean.replace(/\\D/g, ''); }
+  else if (mod.includes('foto')) { cmd = '/foto'; clean = clean.replace(/\\D/g, ''); }
+  else if (mod.includes('telefone') || mod.includes('tel')) { cmd = '/telefone'; clean = clean.replace(/\\D/g, ''); }
+  else if (mod.includes('nome')) { cmd = '/nome'; clean = clean.replace(/\\s+/g, ' ').trim(); }
+  else if (mod.includes('email') || mod.includes('mail')) { cmd = '/email'; clean = clean.toLowerCase().trim(); }
+  else if (mod.includes('endereco')) { cmd = '/endereco'; clean = clean.trim(); }
+  else if (mod.includes('cep')) { cmd = '/cep'; clean = clean.replace(/\\D/g, ''); }
+  else if (mod.includes('cnpj')) { cmd = '/cnpj'; clean = clean.replace(/\\D/g, ''); }
+  else if (mod.includes('titulo')) { cmd = '/titulo'; clean = clean.replace(/\\D/g, ''); }
+  else if (mod.includes('mae')) { cmd = '/mae'; clean = clean.replace(/\\s+/g, ' ').trim(); }
+  else if (mod.includes('placa')) { cmd = '/placa'; clean = clean.replace(/[^a-zA-Z0-9]/g, '').toUpperCase(); }
+  else { cmd = \`/\${mod || 'cpf'}\`; }
+
+  // Vacina absoluta anti-pro
+  cmd = cmd.replace(/^\\/pro[_\\s]*/i, '/');
+  if (cmd === '/' || !cmd) cmd = '/cpf';
+
+  const full = clean ? \`\${cmd} \${clean}\`.trim() : cmd;
+  return { command: cmd, cleanParam: clean, fullMessage: full };
+}
+
+async function resolvePeer(client, targetId) {
+  const clean = targetId.trim();
+  const isPro = clean === '@Hgliopk00bot' || clean === TARGET_BOT_PRO_ID_NUM || clean.toLowerCase().includes('hgliopk00bot');
+
+  if (isPro) {
+    if (cachedProBotPeer) return cachedProBotPeer;
+    try {
+      const res = await client.invoke(new Api.contacts.ResolveUsername({ username: 'Hgliopk00bot' }));
+      if (res?.users?.[0]) {
+        const u = res.users[0];
+        cachedProBotPeer = new Api.InputPeerUser({ userId: u.id, accessHash: u.accessHash });
+        return cachedProBotPeer;
+      }
+    } catch (err) {
+      console.warn('ResolveUsername RPC @Hgliopk00bot:', err.message);
+    }
+    try {
+      const p = await client.getInputEntity(TARGET_BOT_PRO_ID_NUM);
+      if (p) { cachedProBotPeer = p; return p; }
+    } catch {}
+    return '@Hgliopk00bot';
+  }
+
+  if (clean.startsWith('@')) {
+    try {
+      const res = await client.invoke(new Api.contacts.ResolveUsername({ username: clean.replace('@', '') }));
+      if (res?.users?.[0]) return res.users[0];
+    } catch {}
+  }
+  return clean;
+}
+
+// Inicializa Userbot GramJS
+async function startUserbot() {
+  if (!TELEGRAM_API_ID || !TELEGRAM_API_HASH || !TELEGRAM_STRING_SESSION) {
+    console.log('[GramJS] Credenciais do Telegram ausentes nas variáveis de ambiente.');
+    return;
+  }
+  const session = new StringSession(TELEGRAM_STRING_SESSION);
+  userbotClient = new TelegramClient(session, TELEGRAM_API_ID, TELEGRAM_API_HASH, { connectionRetries: 5 });
+  await userbotClient.connect();
+  const me = await userbotClient.getMe();
+  console.log(\`[GramJS] Userbot conectado com sucesso como @\${me.username || me.firstName} (ID: \${me.id})\`);
+
+  // Pré-resolve @Hgliopk00bot
+  try {
+    const proRes = await userbotClient.invoke(new Api.contacts.ResolveUsername({ username: 'Hgliopk00bot' }));
+    if (proRes?.users?.[0]) {
+      cachedProBotPeer = new Api.InputPeerUser({ userId: proRes.users[0].id, accessHash: proRes.users[0].accessHash });
+      console.log('[GramJS] @Hgliopk00bot pré-resolvido:', proRes.users[0].id);
+    }
+  } catch {}
+
+  // Listener para capturar respostas dos bots
+  userbotClient.addEventHandler(async (event) => {
+    const msg = event.message;
+    if (!msg || msg.out) return;
+    const text = (msg.message || msg.text || '').trim();
+    if (!text) return;
+
+    const replyToId = msg.replyTo?.replyToMsgId || msg.replyToMsgId;
+    let reqId = replyToId ? queryByTelegramMsgId.get(replyToId) : null;
+
+    if (!reqId) {
+      for (const [id, q] of activeQueries.entries()) {
+        if (q.cleanedTarget && text.includes(q.cleanedTarget)) { reqId = id; break; }
+      }
+    }
+
+    if (reqId && activeQueries.has(reqId)) {
+      const q = activeQueries.get(reqId);
+      io.to(q.socketId).emit('query:response', {
+        id: reqId,
+        moduleType: q.moduleType,
+        moduleTitle: q.moduleTitle,
+        queryParam: q.queryParam,
+        rawResponse: text,
+        timestamp: Date.now()
+      });
+      activeQueries.delete(reqId);
+    }
+  });
+}
+
+startUserbot().catch(console.error);
+
 io.on('connection', (socket) => {
-  console.log(\`[Socket] Cliente conectado: \${socket.id}\`);
-
-  // 1. Cliente envia requisição de consulta
   socket.on('query:request', async (payload) => {
     const { moduleType, queryParam } = payload;
-    const requestId = \`REQ-\${Date.now().toString().slice(-5)}-\${moduleType.toUpperCase()}\`;
+    const isPro = Boolean(payload.isPro || String(moduleType).toLowerCase().startsWith('pro'));
+    const requestId = \`REQ-\${Date.now().toString().slice(-4)}-\${Math.random().toString(36).substring(2, 6).toUpperCase()}\`;
 
-    const requestData = {
+    const { command, cleanParam, fullMessage } = sanitizeCommand(moduleType, queryParam);
+    const targetChat = isPro ? TELEGRAM_CHAT_ID_PRO : TELEGRAM_CHAT_ID_OLD;
+
+    const record = {
       id: requestId,
       socketId: socket.id,
       moduleType,
-      moduleTitle: MODULES[moduleType] || moduleType,
       queryParam,
+      cleanedTarget: cleanParam,
+      telegramCommand: fullMessage,
+      isPro,
       timestamp: Date.now()
     };
+    activeQueries.set(requestId, record);
+    socket.emit('query:ack', { requestId, status: 'pending', telegramCommand: fullMessage, isPro });
 
-    activeRequests.set(requestId, requestData);
-
-    // Confirma recebimento para o Frontend
-    socket.emit('query:ack', { requestId, message: 'Enviando para central Telegram...' });
-
-    // 2. Enviar dados para o grupo do Telegram
-    if (bot && TELEGRAM_CHAT_ID) {
+    if (userbotClient) {
       try {
-        const text = \`🔍 <b>[INTEL-SAAS] NOVA CONSULTA #\${requestId}</b>\\n\\n\` +
-          \`📋 <b>Módulo:</b> \${requestData.moduleTitle}\\n\` +
-          \`🎯 <b>Alvo:</b> <code>\${queryParam}</code>\\n\` +
-          \`🆔 <b>Socket:</b> <code>\${socket.id}</code>\\n\\n\` +
-          \`👉 <i>Responda (Reply) a esta mensagem com os dados apurados.</i>\`;
-
-        const sent = await bot.sendMessage(TELEGRAM_CHAT_ID, text, { parse_mode: 'HTML' });
-        requestData.telegramMsgId = sent.message_id;
-        msgToRequestMap.set(sent.message_id, requestId);
-        console.log(\`[Telegram] Mensagem enviada para o chat. ID: \${sent.message_id}\`);
+        const peer = await resolvePeer(userbotClient, targetChat);
+        const sent = await userbotClient.sendMessage(peer, { message: fullMessage });
+        queryByTelegramMsgId.set(sent.id, requestId);
+        console.log(\`[Despacho] Enviado para \${targetChat} com comando "\${fullMessage}". Msg ID: \${sent.id}\`);
       } catch (err) {
-        console.error('[Telegram] Erro ao enviar mensagem:', err.message);
+        console.error(\`[Despacho] Falha ao enviar para \${targetChat}:\`, err.message);
       }
-    } else {
-      console.log(\`[Simulação] Consulta \${requestId} aguardando resposta no webhook.\`);
     }
   });
-
-  socket.on('disconnect', () => {
-    console.log(\`[Socket] Cliente desconectado: \${socket.id}\`);
-  });
 });
 
-// 3. Webhook POST: Recebe respostas do Telegram
-app.post('/api/telegram/webhook', (req, res) => {
-  const update = req.body;
-  const message = update.message || update.edited_message;
+app.get('/api/health', (req, res) => res.json({ status: 'ok', time: Date.now() }));
 
-  if (!message) {
-    return res.status(200).json({ ok: true, note: 'Sem mensagem' });
-  }
-
-  const replyTo = message.reply_to_message;
-  const responseText = message.text || message.caption || '';
-  let targetRequestId = null;
-
-  // Localiza o Request ID pela mensagem respondida
-  if (replyTo && replyTo.message_id) {
-    targetRequestId = msgToRequestMap.get(replyTo.message_id);
-  }
-
-  if (!targetRequestId && replyTo && replyTo.text) {
-    const match = replyTo.text.match(/#(REQ-[A-Z0-9-]+)/i);
-    if (match) targetRequestId = match[1];
-  }
-
-  if (!targetRequestId && responseText) {
-    const match = responseText.match(/#(REQ-[A-Z0-9-]+)/i);
-    if (match) targetRequestId = match[1];
-  }
-
-  if (targetRequestId && activeRequests.has(targetRequestId)) {
-    const record = activeRequests.get(targetRequestId);
-    const durationMs = Date.now() - record.timestamp;
-
-    // 4. Devolve em tempo real para o cliente correto via Socket ID
-    io.to(record.socketId).emit('query:response', {
-      id: record.id,
-      moduleType: record.moduleType,
-      moduleTitle: record.moduleTitle,
-      queryParam: record.queryParam,
-      rawResponse: responseText,
-      durationMs,
-      timestamp: Date.now()
-    });
-
-    console.log(\`[Webhook] Resposta emitida para socket \${record.socketId} em \${durationMs}ms\`);
-    activeRequests.delete(targetRequestId);
-    return res.status(200).json({ ok: true, requestId: targetRequestId });
-  }
-
-  res.status(200).json({ ok: true, note: 'Mensagem recebida' });
-});
-
-server.listen(PORT, () => {
-  console.log(\`Servidor rodando na porta \${PORT}\`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(\`Servidor rodando em http://localhost:\${PORT}\`);
 });`,
 
   indexHtml: `<!DOCTYPE html>
