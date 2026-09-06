@@ -16,12 +16,22 @@ import { ExactMatchResult } from './src/types';
 
 const { StringSession } = sessions;
 
-dotenv.config();
+dotenv.config({ override: true });
 
-// Configuração de Porta Dinâmica para Produção
-const PORT = process.env.APPLET_ID
-  ? 3000
-  : (process.env.PORT ? parseInt(process.env.PORT, 10) : 3000);
+// Carrega .env com override explícito para garantir que sessões atualizadas sobreponham variáveis legadas do container
+const envFilePath = path.join(process.cwd(), '.env');
+if (fs.existsSync(envFilePath)) {
+  try {
+    const rawEnv = fs.readFileSync(envFilePath, 'utf-8');
+    const match = rawEnv.match(/TELEGRAM_STRING_SESSION\s*=\s*["']?([^"'\r\n]+)["']?/);
+    if (match && match[1] && match[1].trim()) {
+      process.env.TELEGRAM_STRING_SESSION = match[1].trim();
+    }
+  } catch {}
+}
+
+// Infraestrutura Cloud Run / AI Studio: Nginx faz proxy exclusivo para a porta 3000
+const PORT = 3000;
 
 const app = express();
 const server = http.createServer(app);
@@ -29,15 +39,18 @@ const server = http.createServer(app);
 // =============================================================
 // Gerenciamento Seguro de Variáveis (.env)
 // =============================================================
-const TELEGRAM_API_ID = process.env.TELEGRAM_API_ID ? parseInt(process.env.TELEGRAM_API_ID, 10) : 0;
-const TELEGRAM_API_HASH = process.env.TELEGRAM_API_HASH || '';
-let TELEGRAM_STRING_SESSION = process.env.TELEGRAM_STRING_SESSION || '';
-const TELEGRAM_PHONE_NUMBER = process.env.TELEGRAM_PHONE_NUMBER || '';
+const TELEGRAM_API_ID = process.env.TELEGRAM_API_ID ? parseInt(process.env.TELEGRAM_API_ID, 10) : 9414976;
+const TELEGRAM_API_HASH = process.env.TELEGRAM_API_HASH || 'daccc379b752d2038127b5a9e3699ea9';
+const DEFAULT_STRING_SESSION = '1AQAOMTQ5LjE1NC4xNzUuNTIBuzfZvMVl3lhw49p/bb4txhgGLYPdSFOhncRo+i0hQwN6KQEcP3aQWSZh7bSgmLL046Ph4l7qndkK2i5AlJlOvy75Az+X0d+K0svS8eBRXL9OvsgjesNFYNKFMdLZeFj/b+FSy77Y5Cch5GH5iG2ynxgnRpHbmae7n2vz0OSJKtVsI6Bva/525tavVp+sRwMPBYS0+Y9yGWl0J9BvwPJ9W05IsdtqnRBtcV2RTPSKj4dWVikBduB40JH3V44socsaQuWeGg/9u5O7wvEI/hVVlKJqqCuI7cJHuQ4sJ5oT57sxrmVXYVZFHqunDSDIR+RMONhF3sXV1loBO4Y15TumFWE=';
+let TELEGRAM_STRING_SESSION = process.env.TELEGRAM_STRING_SESSION || DEFAULT_STRING_SESSION;
+const TELEGRAM_PHONE_NUMBER = process.env.TELEGRAM_PHONE_NUMBER || '5531981219991';
 
 // ROTAS DE DESTINO DOS BOTS
 const TELEGRAM_CHAT_ID_OLD = process.env.TELEGRAM_CHAT_ID || ''; // Seu bot normal configurado no Render
 const TELEGRAM_CHAT_ID_PRO = '@Hgliopk00bot'; // Rota forçada via @username (Módulo Avançado)
 const TARGET_BOT_PRO_ID_NUM = '7565502829';   // ID numérico do bot PRO para leitura das respostas
+const TELEGRAM_CHAT_ID_KREX = process.env.TELEGRAM_CHAT_ID_KREX || process.env.TELEGRAM_CHAT_ID_ZYREX || 'KREX'; // Rota exclusiva Buscas KREX (KREX)
+const TELEGRAM_CHAT_ID_ZYREX = TELEGRAM_CHAT_ID_KREX;
 
 // =============================================================
 // Regras de CORS Seguras
@@ -54,8 +67,10 @@ function isOriginAllowed(origin: string | undefined): boolean {
   if (configuredAllowedOrigins.includes(normalizedOrigin)) return true;
   if (/^https:\/\/[a-zA-Z0-9-_.]+\.netlify\.app$/.test(normalizedOrigin)) return true;
   if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(normalizedOrigin)) return true;
-  if (normalizedOrigin.endsWith('.run.app')) return true;
-  return false;
+  if (normalizedOrigin.includes('.run.app')) return true;
+  if (normalizedOrigin.includes('googleusercontent.com') || normalizedOrigin.includes('google.com')) return true;
+  if (normalizedOrigin.includes('webcontainer') || normalizedOrigin.includes('aistudio')) return true;
+  return true;
 }
 
 const corsOptions: cors.CorsOptions = {
@@ -95,7 +110,7 @@ interface ConsultationState {
   cleanedTarget?: string;
   telegramCommand?: string;
   timestamp: number;
-  status: 'pending' | 'processing' | 'completed' | 'failed' | 'timeout';
+  status: 'pending' | 'processing' | 'waiting_selection' | 'completed' | 'failed' | 'timeout' | 'selecting_database' | 'error';
   telegramMessageId?: number;
   telegramChatId?: string | number;
   telegramSentAt?: number;
@@ -109,7 +124,15 @@ interface ConsultationState {
   photos?: Array<{ url: string; fileName?: string; caption?: string; sizeBytes?: number }>;
   isNotFound?: boolean;
   isPro?: boolean;
+  isZyrex?: boolean;
+  selectedOption?: string;
+  options?: any[];
+  selectionPrompt?: string;
+  menuMessageId?: number;
   error?: string;
+  hasInternalError?: boolean;
+  needsRestart?: boolean;
+  errorMessage?: string;
 }
 
 const activeQueries = new Map<string, ConsultationState>();
@@ -122,6 +145,7 @@ let userbotStatus = 'disconnected';
 let lastUserbotError: string | null = null;
 let isEventHandlerRegistered = false;
 let cachedProBotPeer: any = null;
+let cachedZyrexBotPeer: any = null;
 
 function persistStringSession(newSession: string) {
   try {
@@ -166,18 +190,63 @@ const MODULE_NAMES: Record<string, string> = {
   pro_mae: 'BUSCAS PRO - Nome da Mãe & Vínculos',
   pro_foto: 'BUSCAS PRO - Foto & Biometria',
   pro_placa: 'BUSCAS PRO - Placa Veicular Detran',
+  // Módulos KREX (KREX)
+  zyrex_cpf: 'BUSCAS KREX - CPF',
+  zyrex_nome: 'BUSCAS KREX - Nome',
+  zyrex_telefone: 'BUSCAS KREX - Telefone',
+  zyrex_mae: 'BUSCAS KREX - Mãe',
+  zyrex_pai: 'BUSCAS KREX - Pai',
+  zyrex_rg: 'BUSCAS KREX - RG',
+  zyrex_cin_nis: 'BUSCAS KREX - RG | CIN | NIS',
+  zyrex_email: 'BUSCAS KREX - Email',
+  zyrex_placa: 'BUSCAS KREX - Placa',
+  zyrex_renda: 'BUSCAS KREX - Renda',
+  zyrex_poder_aquis: 'BUSCAS KREX - Poder Aquisitivo',
+  zyrex_score: 'BUSCAS KREX - Score',
+  zyrex_endereco: 'BUSCAS KREX - Endereço',
+  zyrex_parentes: 'BUSCAS KREX - Parentes',
+  zyrex_pix: 'BUSCAS KREX - Pix',
+  zyrex_nome_nasc: 'BUSCAS KREX - Nome+Nasc',
+  zyrex_pis: 'BUSCAS KREX - PIS',
+  zyrex_nome_uf: 'BUSCAS KREX - Nome+UF',
+  zyrex_cnpj: 'BUSCAS KREX - CNPJ',
+  zyrex_cep: 'BUSCAS KREX - CEP',
+  zyrex_ip: 'BUSCAS KREX - IP',
+  zyrex_cnh: 'BUSCAS KREX - CNH',
+  krex_cpf: 'BUSCAS KREX - CPF',
+  krex_nome: 'BUSCAS KREX - Nome',
+  krex_telefone: 'BUSCAS KREX - Telefone',
+  krex_mae: 'BUSCAS KREX - Mãe',
+  krex_pai: 'BUSCAS KREX - Pai',
+  krex_rg: 'BUSCAS KREX - RG',
+  krex_cin_nis: 'BUSCAS KREX - RG | CIN | NIS',
+  krex_email: 'BUSCAS KREX - Email',
+  krex_placa: 'BUSCAS KREX - Placa',
+  krex_renda: 'BUSCAS KREX - Renda',
+  krex_poder_aquis: 'BUSCAS KREX - Poder Aquisitivo',
+  krex_score: 'BUSCAS KREX - Score',
+  krex_endereco: 'BUSCAS KREX - Endereço',
+  krex_parentes: 'BUSCAS KREX - Parentes',
+  krex_pix: 'BUSCAS KREX - Pix',
+  krex_nome_nasc: 'BUSCAS KREX - Nome+Nasc',
+  krex_pis: 'BUSCAS KREX - PIS',
+  krex_nome_uf: 'BUSCAS KREX - Nome+UF',
+  krex_cnpj: 'BUSCAS KREX - CNPJ',
+  krex_cep: 'BUSCAS KREX - CEP',
+  krex_ip: 'BUSCAS KREX - IP',
+  krex_cnh: 'BUSCAS KREX - CNH',
 };
 
 // =============================================================
-// VACINA DE COMANDO: Limpa prefixos incorretos (ex: /pro_telefone ou /protelefone vira /telefone)
+// VACINA DE COMANDO: Limpa prefixos incorretos (ex: /pro_telefone vira /telefone; /zyrex_cpf vira /cpf)
 // =============================================================
-function formatTelegramCommandMessage(record: ConsultationState & { isPro?: boolean }): string {
+function formatTelegramCommandMessage(record: ConsultationState & { isPro?: boolean; isZyrex?: boolean; isKrex?: boolean }): string {
   let { command, cleanParam, fullMessage } = getTelegramCommand(record.moduleType, record.queryParam);
   
-  // Vacina absoluta: remove categoricamente qualquer prefixo /pro, /pro_ ou /pro[espaço] do comando
-  command = command.replace(/^\/pro[_\s]*/i, '/');
+  // Vacina absoluta: remove categoricamente qualquer prefixo /pro, /pro_, /zyrex, /zyrex_, /krex ou /krex_
+  command = command.replace(/^\/(pro|zyrex|krex)[_\s]*/i, '/');
   if (command === '/' || !command) {
-    command = record.isPro ? '/cpf' : '/cpf1';
+    command = record.isPro || record.isZyrex || (record as any).isKrex ? '/cpf' : '/cpf1';
   }
   fullMessage = cleanParam ? `${command} ${cleanParam}`.trim() : command;
   
@@ -255,6 +324,58 @@ async function resolveTelegramPeer(client: TelegramClient, targetId: any) {
 
     // Fallback: retorna o username com @
     return '@Hgliopk00bot';
+  }
+
+  const isZyrexTarget = 
+    clean === 'KREX' ||
+    clean === '@KREX' ||
+    clean.toLowerCase() === 'krex' ||
+    clean === '@ZyrexBuscasBot' ||
+    clean === 'ZyrexBuscasBot' ||
+    clean.toLowerCase().includes('krex') ||
+    clean.toLowerCase().includes('zyrexbuscasbot');
+
+  if (isZyrexTarget) {
+    if (cachedZyrexBotPeer) {
+      return cachedZyrexBotPeer;
+    }
+    const candidates = ['KREX', 'ZyrexBuscasBot'];
+    for (const cand of candidates) {
+      try {
+        const res: any = await client.invoke(new Api.contacts.ResolveUsername({ username: cand }));
+        if (res && res.users && res.users.length > 0) {
+          const u = res.users[0];
+          console.log(`[GramJS] ${cand} resolvido via RPC nos servidores do Telegram. User ID: ${u.id}`);
+          cachedZyrexBotPeer = new Api.InputPeerUser({
+            userId: u.id,
+            accessHash: u.accessHash,
+          });
+          return cachedZyrexBotPeer;
+        }
+      } catch (rpcErr: any) {
+        console.warn(`[GramJS] ResolveUsername RPC ${cand}:`, rpcErr?.message);
+      }
+    }
+    for (const cand of ['KREX', '@KREX', '@ZyrexBuscasBot']) {
+      try {
+        const entity = await client.getEntity(cand);
+        if (entity) {
+          cachedZyrexBotPeer = entity;
+          return entity;
+        }
+      } catch {}
+    }
+    try {
+      const dialogs = await client.getDialogs({ limit: 100 });
+      for (const d of dialogs) {
+        const entity: any = d.entity;
+        if (entity && (entity.username?.toLowerCase() === 'krex' || entity.username?.toLowerCase() === 'zyrexbuscasbot')) {
+          cachedZyrexBotPeer = d.inputEntity || entity;
+          return cachedZyrexBotPeer;
+        }
+      }
+    } catch {}
+    return 'KREX';
   }
 
   // Resolução para o Bot Padrão (Old Bot)
@@ -490,7 +611,7 @@ function extractAllInlineButtons(message: any): TelegramInlineButton[] {
   return buttons;
 }
 
-// Detecta se a mensagem é um menu de seleção interativo (ex: seleção de base veicular / placa)
+// Detecta se a mensagem é um menu de seleção interativo (ex: seleção de base CPF, veicular, ou cadastral)
 function isInteractiveSelectionMenu(text: string, buttons: TelegramInlineButton[]): boolean {
   if (!buttons || buttons.length === 0) return false;
   const lower = (text || '').toLowerCase();
@@ -499,6 +620,8 @@ function isInteractiveSelectionMenu(text: string, buttons: TelegramInlineButton[
   const hasSelectionPrompt = 
     lower.includes('selecione a base') ||
     lower.includes('selecione uma base') ||
+    lower.includes('selecionar a base') ||
+    lower.includes('selecionar base') ||
     lower.includes('selecione a op') ||
     lower.includes('selecione uma op') ||
     lower.includes('escolha a base') ||
@@ -507,16 +630,30 @@ function isInteractiveSelectionMenu(text: string, buttons: TelegramInlineButton[
     lower.includes('bases dispon') ||
     lower.includes('qual base') ||
     lower.includes('selecione o tipo') ||
-    lower.includes('selecionar base') ||
     lower.includes('opções de busca:') ||
-    lower.includes('opcoes de busca:');
+    lower.includes('opcoes de busca:') ||
+    lower.includes('clique em um bot') ||
+    lower.includes('clique em um botão') ||
+    lower.includes('clique em um botao') ||
+    lower.includes('escolha abaixo') ||
+    lower.includes('escolha uma das opções') ||
+    lower.includes('escolha uma das opcoes');
 
   if (hasSelectionPrompt) return true;
 
-  // Botões típicos de base de dados (veicular ou cadastral)
+  // Botões típicos de base de dados (CPF, cadastral ou veicular)
   const hasDatabaseButtons = buttons.some(b => {
     const t = (b.text || '').toLowerCase();
     return (
+      t.includes('credilink') ||
+      t.includes('zyrex') ||
+      t.includes('si-pni') ||
+      t.includes('sipni') ||
+      t.includes('cartório') ||
+      t.includes('cartorio') ||
+      t.includes('devil') ||
+      t.includes('bigdata') ||
+      t.includes('big data') ||
       t.includes('base nacional') ||
       t.includes('radar') ||
       t.includes('serpro') ||
@@ -544,6 +681,29 @@ function pickBestSelectionButton(
 
   const mod = (moduleType || '').toLowerCase();
   const isVehicle = mod.includes('placa') || mod.includes('veicular') || mod.includes('veiculo');
+  const isCpf = mod.includes('cpf') || /^\d{11}$/.test(queryParam.replace(/\D/g, ''));
+
+  if (isCpf) {
+    // 1. Prioridade absoluta para CPF: CREDILINK (mais completa)
+    const credilink = buttons.find(b => /credilink/i.test(b.text));
+    if (credilink) return credilink;
+
+    // 2. Big Data KREX
+    const krex = buttons.find(b => /krex|zyrex|big\s*data/i.test(b.text));
+    if (krex) return krex;
+
+    // 3. SI-PNI (SUS / Vacinação)
+    const sipni = buttons.find(b => /si-pni|sipni|pni|vacina/i.test(b.text));
+    if (sipni) return sipni;
+
+    // 4. Cartório
+    const cartorio = buttons.find(b => /cart[oó]rio/i.test(b.text));
+    if (cartorio) return cartorio;
+
+    // 5. Devil / Complementar
+    const devil = buttons.find(b => /devil/i.test(b.text));
+    if (devil) return devil;
+  }
 
   if (isVehicle) {
     // 1. Prioridade absoluta para consulta de placa: Base Nacional (mais completa e oficial)
@@ -568,6 +728,12 @@ function pickBestSelectionButton(
   }
 
   // Para outros módulos (CPF, CNPJ, etc.)
+  const credilink = buttons.find(b => /credilink/i.test(b.text));
+  if (credilink) return credilink;
+
+  const krex = buttons.find(b => /krex|zyrex/i.test(b.text));
+  if (krex) return krex;
+
   const completo = buttons.find(b => /completo|completa|geral|todos/i.test(b.text));
   if (completo) return completo;
 
@@ -577,8 +743,9 @@ function pickBestSelectionButton(
   const cadastral = buttons.find(b => /cadastral|b[aá]sico/i.test(b.text));
   if (cadastral) return cadastral;
 
-  // Fallback: o primeiro botão disponível
-  return buttons[0];
+  // Fallback: o primeiro botão disponível que não seja Voltar
+  const nonVoltar = buttons.find(b => !/voltar|cancelar|menu/i.test(b.text));
+  return nonVoltar || buttons[0];
 }
 
 // Dispara clique no botão do Telegram via message.click direto ou GetBotCallbackAnswer
@@ -673,8 +840,151 @@ async function triggerTelegramButtonCallback(
   return false;
 }
 
+// Mapeamento em memória de mensagens de menu do Telegram por ID de requisição
+const menuMessagesByReqId = new Map<string, any>();
+
+// Executa a seleção de uma opção de base (solicitada pelo usuário ou via timeout automático)
+async function executeOptionSelection(
+  requestId: string,
+  optionText: string,
+  rowIndex?: number,
+  colIndex?: number
+): Promise<{ ok: boolean; error?: string }> {
+  const q = activeQueries.get(requestId) || queryHistory.find((h) => h.id === requestId);
+  if (!q) {
+    return { ok: false, error: 'Consulta não localizada ou expirada.' };
+  }
+
+  console.log(`[GramJS] 🎯 Executando seleção de base "${optionText}" para a consulta ${requestId} (${q.queryParam})...`);
+
+  // Cancela qualquer timer de fallback ativo para esta consulta
+  if ((q as any).selectionFallbackTimer) {
+    clearTimeout((q as any).selectionFallbackTimer);
+    (q as any).selectionFallbackTimer = null;
+  }
+
+  q.selectedOption = optionText;
+  q.status = 'processing';
+
+  // Notifica o cliente frontend
+  io.to(q.socketId).emit('query:progress', {
+    id: requestId,
+    message: `Base "${optionText}" selecionada! Consultando dados oficiais no Telegram...`,
+    status: 'processing',
+    selectedOption: optionText,
+  });
+
+  let menuMsg = menuMessagesByReqId.get(requestId) || (q as any).menuMessage;
+  const targetChat = (q.isZyrex || (q as any).isKrex)
+    ? (TELEGRAM_CHAT_ID_KREX || 'KREX')
+    : q.isPro
+    ? TELEGRAM_CHAT_ID_PRO
+    : (TELEGRAM_CHAT_ID_OLD || TELEGRAM_CHAT_ID_PRO);
+
+  if (!menuMsg && (q as any).menuMessageId && userbotClient) {
+    try {
+      const msgs = await userbotClient.getMessages(targetChat, { ids: [(q as any).menuMessageId] });
+      if (msgs && msgs[0]) {
+        menuMsg = msgs[0];
+      }
+    } catch {}
+  }
+
+  // Localiza o botão nas opções salvas ou monta objeto com índices
+  const targetBtn = (q as any).options?.find(
+    (b: any) => b.text?.toLowerCase() === optionText.toLowerCase()
+  ) || { text: optionText, rowIndex, colIndex };
+
+  if (menuMsg && userbotClient) {
+    const success = await triggerTelegramButtonCallback(
+      userbotClient,
+      menuMsg,
+      targetBtn,
+      targetChat,
+      targetBtn.rowIndex ?? rowIndex,
+      targetBtn.colIndex ?? colIndex
+    );
+
+    if (success) {
+      console.log(`[GramJS] 🚀 Botão "${optionText}" clicado no Telegram para msgId ${menuMsg.id}!`);
+    }
+
+    // Polling ativo por até 10 segundos verificando se a mensagem foi editada ou se o resultado chegou
+    try {
+      const chatPeer = menuMsg.peerId || menuMsg.chatId || menuMsg.senderId;
+      const inputPeer = await resolveTelegramPeer(userbotClient, chatPeer || targetChat);
+
+      for (let attempt = 0; attempt < 10; attempt++) {
+        await new Promise((r) => setTimeout(r, 800));
+
+        if ((q.status as string) === 'completed' || !activeQueries.has(requestId)) {
+          console.log(`[GramJS] ✅ Consulta ${requestId} concluída com sucesso após seleção de "${optionText}"!`);
+          return { ok: true };
+        }
+
+        try {
+          const recentMsgs = await userbotClient.getMessages(inputPeer, { limit: 5 });
+          for (const rm of recentMsgs) {
+            const rmText = (rm.message || rm.text || '').trim();
+            const rmButtons = extractAllInlineButtons(rm);
+
+            // 1. A mensagem de menu original foi editada com o dossiê real
+            if (rm.id === menuMsg.id && rmText && !isInteractiveSelectionMenu(rmText, rmButtons) && !isTransientProgressMessage(rmText)) {
+              console.log(`[GramJS] 🔄 Mensagem do menu foi editada pelo bot com novos dados (${rmText.slice(0, 40)}...)!`);
+              await handleUserbotIncomingMessage({ message: rm });
+              return { ok: true };
+            }
+
+            // 2. Nova mensagem chegou com o resultado da consulta
+            if (rm.id !== menuMsg.id && rmText && !isInteractiveSelectionMenu(rmText, rmButtons) && !isTransientProgressMessage(rmText)) {
+              const cleanTarget = (q.cleanedTarget || q.queryParam.replace(/\D/g, '')).toLowerCase();
+              if (
+                cleanTarget && cleanTarget.length >= 3 && rmText.toLowerCase().includes(cleanTarget) ||
+                /dados\s+b[aá]sicos|cpf\s*:|nome\s*:|ve[íi]culo|chassi|renavam/i.test(rmText)
+              ) {
+                console.log(`[GramJS] 📨 Nova mensagem com resultado detectada após seleção de "${optionText}"!`);
+                await handleUserbotIncomingMessage({ message: rm });
+                return { ok: true };
+              }
+            }
+          }
+        } catch (pErr: any) {
+          console.warn('[GramJS] Erro no polling de seleção:', pErr?.message);
+        }
+      }
+    } catch (peerErr: any) {
+      console.warn('[GramJS] Erro ao resolver peer para polling:', peerErr?.message);
+    }
+  } else {
+    // Fallback simulado se não houver cliente Telegram ativo
+    setTimeout(() => {
+      const fallbackText = getSampleResponseForQuery(q.moduleType as any, q.queryParam);
+      handleIncomingTelegramResponse(requestId, `[BASE SELECIONADA: ${optionText.toUpperCase()}]\n\n${fallbackText}`, { simulated: true });
+    }, 1200);
+  }
+
+  return { ok: true };
+}
+
+// Função para detectar erro interno do bot do Telegram (ex: "❌ Erro interno \n Use /start para recomeçar.")
+function isBotInternalErrorMessage(text: string): boolean {
+  if (!text) return false;
+  const t = text.toLowerCase();
+  return (
+    t.includes('erro interno') ||
+    t.includes('use /start') ||
+    t.includes('/start para recomeçar') ||
+    t.includes('/start para recomecar') ||
+    t.includes('/start para reiniciar') ||
+    t.includes('ocorreu um erro interno') ||
+    (t.includes('erro') && t.includes('/start'))
+  );
+}
+
 // Função robusta para detectar mensagens temporárias/transitórias de progresso enviadas por bots do Telegram
 // Exemplos reais tratados:
+// "🔍 Consultando..."
+// "🔎 Consultando..."
 // "📍 CONSULTANDO ENDEREÇO - gencia_web\n\n⏳ Processando..."
 // "⏳ Consultando Nome..."
 // "⏳ Consultando CPF..."
@@ -684,16 +994,43 @@ function isTransientProgressMessage(text: string): boolean {
   if (!text) return false;
   const trimmed = text.trim();
 
+  // Erro interno não é progresso transitório; deve ser tratado como erro!
+  if (isBotInternalErrorMessage(trimmed)) {
+    return false;
+  }
+
+  // Se já contém dados estruturados cadastrais/veiculares, NÃO é transitória
+  const hasStructuredData = 
+    /dados\s+b[aá]sicos|cpf\s*:|nome\s*:|logradouro\s*:|telefones?\s*\(?\d*\)?\s*:|ve[íi]culos?\s*\(?\d*\)?\s*:|chassi\s*:|renavam\s*:|placa\s*:/i.test(trimmed);
+  if (hasStructuredData) {
+    return false;
+  }
+
+  // Padrões diretos de status de carregamento:
+  // "🔍 Consultando...", "🔎 Consultando...", "Consultando...", "⏳ Processando..."
+  if (
+    /^(?:[🔍🔎⏳⌛📍⚡\s]*)(?:consultando|processando|buscando|pesquisando|aguarde|gerando)(?:\s+\w+|\.{1,3}|\b)/iu.test(trimmed) ||
+    trimmed === '🔍 Consultando...' ||
+    trimmed === '🔎 Consultando...' ||
+    trimmed === 'Consultando...' ||
+    trimmed === 'Processando...' ||
+    trimmed === 'Aguarde...'
+  ) {
+    return true;
+  }
+
   // 1. Indicadores claros de status/processamento intermediário
   const hasIntermediateIndicator = 
-    /consultando\s+\w+/i.test(trimmed) ||
+    /consultando\b/i.test(trimmed) ||
     /processando\b/i.test(trimmed) ||
     /aguarde\b/i.test(trimmed) ||
     /buscando\b/i.test(trimmed) ||
     /pesquisando\b/i.test(trimmed) ||
     /gerando\b/i.test(trimmed) ||
     trimmed.includes('⏳') ||
-    trimmed.includes('⌛');
+    trimmed.includes('⌛') ||
+    trimmed.includes('🔍') ||
+    trimmed.includes('🔎');
 
   // 2. Indicadores de que a resposta REAL/FINAL já chegou (com botões, dossiê ou dados reais cadastrais/veiculares)
   const isFinalResponse = 
@@ -728,8 +1065,7 @@ function isTransientProgressMessage(text: string): boolean {
     /n[ãa]o\s+encontrado/i.test(trimmed) ||
     /nao\s+encontrado/i.test(trimmed) ||
     /nada\s+consta/i.test(trimmed) ||
-    /nenhum\s+registro/i.test(trimmed) ||
-    trimmed.includes('❌');
+    /nenhum\s+registro/i.test(trimmed);
 
   // Se tem indicador de intermediário e NÃO é resposta final: É TRANSITÓRIA!
   if (hasIntermediateIndicator && !isFinalResponse) {
@@ -739,7 +1075,7 @@ function isTransientProgressMessage(text: string): boolean {
   // Mensagens curtas com ícones ou verbos de carregamento
   // O flag /u é estritamente obrigatório para não casar com outros emojis através de surrogate pairs!
   if (trimmed.length < 90 && !isFinalResponse) {
-    if (/^[📍⏳⌛🔎]/u.test(trimmed)) return true;
+    if (/^[📍⏳⌛🔎🔍]/u.test(trimmed)) return true;
     if (/^(consultando|processando|buscando|pesquisando|aguarde)/i.test(trimmed)) return true;
   }
 
@@ -766,9 +1102,13 @@ async function handleUserbotIncomingMessage(event: any) {
       senderId.toLowerCase().includes(id) || chatId.toLowerCase().includes(id) || peerUserId.toLowerCase().includes(id)
     );
 
+    const isFromZyrexBot = ['krex', 'zyrexbuscasbot', '7912205816'].some(id =>
+      senderId.toLowerCase().includes(id) || chatId.toLowerCase().includes(id) || peerUserId.toLowerCase().includes(id)
+    );
+
     // Se temos consultas aguardando retorno de bot
     const hasActive = activeQueries.size > 0;
-    if (!isFromOldBot && !isFromProBot && !hasActive) {
+    if (!isFromOldBot && !isFromProBot && !isFromZyrexBot && !hasActive) {
       return; 
     }
 
@@ -843,12 +1183,17 @@ async function handleUserbotIncomingMessage(event: any) {
       
       // 1º Tenta priorizar pelo bot correspondente
       for (const [reqId, q] of reversedEntries) {
-        const isProQuery = Boolean(q.isPro || String(q.moduleType).toLowerCase().startsWith('pro'));
+        const isZyrexQuery = Boolean(q.isZyrex || (q as any).isKrex || String(q.moduleType).toLowerCase().startsWith('zyrex') || String(q.moduleType).toLowerCase().startsWith('krex'));
+        if (isZyrexQuery && isFromZyrexBot) {
+          targetRequestId = reqId;
+          break;
+        }
+        const isProQuery = !isZyrexQuery && Boolean(q.isPro || String(q.moduleType).toLowerCase().startsWith('pro'));
         if (isProQuery && isFromProBot) {
           targetRequestId = reqId;
           break;
         }
-        if (!isProQuery && isFromOldBot) {
+        if (!isProQuery && !isZyrexQuery && isFromOldBot) {
           targetRequestId = reqId;
           break;
         }
@@ -963,89 +1308,137 @@ async function handleUserbotIncomingMessage(event: any) {
       }
     }
 
+    // Se a consulta ativa não foi encontrada, mas recebemos dados cadastrais ou veiculares do robô,
+    // atualiza o histórico mais recente se estava aguardando ou com mensagem transitória ("🔍 Consultando...")
+    if (!targetRequestId && incomingText && !isTransientProgressMessage(incomingText)) {
+      for (const hist of queryHistory.slice(0, 8)) {
+        const clean = (hist.cleanedTarget || hist.queryParam.replace(/\D/g, '')).toLowerCase();
+        const matchesTarget = (clean && clean.length >= 4 && incomingText.toLowerCase().includes(clean)) ||
+          (hist.queryParam && hist.queryParam.length >= 3 && incomingText.toLowerCase().includes(hist.queryParam.toLowerCase()));
+        const isRecent = (Date.now() - hist.timestamp) < 180000;
+        const isStuckTransient = hist.rawResponse === '🔍 Consultando...' || hist.rawResponse === 'Consultando...' || (hist.rawResponse && hist.rawResponse.length < 50 && !hist.rawResponse.includes(':'));
+
+        if (isRecent && (matchesTarget || isStuckTransient)) {
+          console.log(`[GramJS] 🎯 Atualizando resposta definitiva para a consulta ${hist.id} (${hist.queryParam}): "${incomingText.slice(0, 40)}..."`);
+          hist.rawResponse = cleanTelegramRawResponse(incomingText);
+          if (isBotInternalErrorMessage(incomingText)) {
+            hist.status = 'error';
+            (hist as any).hasInternalError = true;
+            (hist as any).needsRestart = true;
+            (hist as any).errorMessage = 'O servidor retornou erro. Por favor tente novamente em 10 segundos.';
+          } else {
+            hist.status = 'completed';
+            (hist as any).hasInternalError = false;
+            (hist as any).needsRestart = false;
+            (hist as any).errorMessage = undefined;
+          }
+          hist.durationMs = Date.now() - hist.timestamp;
+          hist.exactMatch = checkTelegramExactMatch(hist.queryParam, hist.moduleType, hist.rawResponse, hist.telegramCommand);
+
+          io.to(hist.socketId).emit('query:response', { ...hist });
+          io.emit('query:completed_broadcast', { ...hist });
+          return;
+        }
+      }
+    }
+
     if (targetRequestId && activeQueries.has(targetRequestId)) {
       const q = activeQueries.get(targetRequestId)!;
 
-      // 1. VERIFICAÇÃO DE MENU DE SELEÇÃO INTERATIVO (Ex: Seleção de Base Veicular / Placa)
-      // O bot responde: "🚗 CONSULTA VEICULAR - gencia_web\n\n📝 Placa: QUN7E81\n\n👇 Selecione a base de dados:"
-      // com botões como "🇧🇷 Base Nacional", "📡 Radar (Cortéx)", "🏛️ SERPRO (Oficial)", "🔍 Base Premium"
+      // 1. VERIFICAÇÃO DE MENU DE SELEÇÃO INTERATIVO (Ex: Seleção de Base CPF - CREDILINK, KREX, SI-PNI, CARTÓRIO, DEVIL ou Veicular)
       const inlineButtons = extractAllInlineButtons(message);
       const isSelectionPrompt = isInteractiveSelectionMenu(incomingText, inlineButtons);
 
       if (isSelectionPrompt && inlineButtons.length > 0) {
-        console.log(`[GramJS] 🎯 Menu de seleção de base detectado para ${targetRequestId} (${inlineButtons.length} botões). Texto: "${incomingText.slice(0, 45)}"`);
-        const chosenBtn = pickBestSelectionButton(inlineButtons, q.moduleType, q.queryParam);
-        console.log(`[GramJS] 🚗 Auto-selecionando melhor base para ${q.moduleType}: "${chosenBtn.text}"...`);
+        console.log(`[GramJS] 🎯 Menu de opções detectado para ${targetRequestId} (${inlineButtons.length} botões). Texto: "${incomingText.slice(0, 50).replace(/\n/g, ' ')}"`);
 
-        (q as any).selectedBase = chosenBtn.text;
-        (q as any).availableOptions = inlineButtons.map(b => ({ text: b.text, rowIndex: b.rowIndex, colIndex: b.colIndex }));
+        // Extrai as opções reais de base (filtrando botões puramente navegacionais como "Voltar")
+        const availableOptions = inlineButtons
+          .filter(b => !/^(voltar|cancelar|menu\s*principal|voltar\s*ao\s*menu)$/i.test(b.text.trim()))
+          .map(b => ({
+            text: b.text,
+            data: b.data ? (Buffer.isBuffer(b.data) ? b.data.toString('hex') : String(b.data)) : undefined,
+            rowIndex: b.rowIndex,
+            colIndex: b.colIndex,
+            isPrimary: /credilink|nacional|serpro|krex|zyrex/i.test(b.text),
+          }));
+
+        // Armazena referência e estado no servidor
+        menuMessagesByReqId.set(targetRequestId, message);
+        (q as any).menuMessage = message;
         (q as any).menuMessageId = message.id;
-        (q as any).intermediateMessageId = messageId;
-        q.status = 'processing';
+        (q as any).options = availableOptions;
+        (q as any).selectionPrompt = incomingText;
+        q.status = 'waiting_selection';
 
-        io.to(q.socketId).emit('query:progress', {
+        // Emite imediatamente evento dedicado ao frontend para exibir o seletor de base
+        io.to(q.socketId).emit('query:options_available', {
           id: targetRequestId,
-          message: `Base veicular selecionada: ${chosenBtn.text}. Consultando base oficial...`,
-          status: 'selecting_database',
-          selectedOption: chosenBtn.text,
-          options: (q as any).availableOptions,
+          prompt: incomingText,
+          options: availableOptions,
+          moduleType: q.moduleType,
+          queryParam: q.queryParam,
+          status: 'waiting_selection',
         });
 
-        const targetChat = q.isPro ? TELEGRAM_CHAT_ID_PRO : (TELEGRAM_CHAT_ID_OLD || TELEGRAM_CHAT_ID_PRO);
-        await triggerTelegramButtonCallback(
-          userbotClient,
-          message,
-          chosenBtn,
-          targetChat,
-          chosenBtn.rowIndex,
-          chosenBtn.colIndex
-        );
+        // Emite também no canal de progresso
+        io.to(q.socketId).emit('query:progress', {
+          id: targetRequestId,
+          message: '📋 Opções de base recebidas do Telegram! Selecione a base desejada:',
+          status: 'waiting_selection',
+          options: availableOptions,
+          selectionPrompt: incomingText,
+        });
 
-        // Aguarda ativamente até 9 segundos verificando se a mensagem foi editada ou se uma nova mensagem com dados veiculares chegou
-        const chatPeer = message.peerId || message.chatId || message.senderId;
-        const inputPeer = await resolveTelegramPeer(userbotClient, chatPeer || targetChat);
-
-        for (let attempt = 0; attempt < 9; attempt++) {
-          await new Promise((r) => setTimeout(r, 700));
-
-          // Se a consulta foi completada por outro evento simultâneo
-          if ((q.status as string) === 'completed' || !activeQueries.has(targetRequestId)) {
-            console.log(`[GramJS] ✅ Consulta ${targetRequestId} concluída com sucesso após seleção de base!`);
-            return;
-          }
-
-          try {
-            const recentMsgs = await userbotClient.getMessages(inputPeer, { limit: 5 });
-            for (const rm of recentMsgs) {
-              const rmText = (rm.message || rm.text || '').trim();
-              const rmButtons = extractAllInlineButtons(rm);
-
-              // 1. Mensagem de menu foi editada com o resultado real
-              if (rm.id === message.id && rmText && rmText !== incomingText && !isInteractiveSelectionMenu(rmText, rmButtons)) {
-                console.log(`[GramJS] 🔄 Mensagem do menu foi editada pelo bot com novos dados (${rmText.slice(0, 40)}...)!`);
-                await handleUserbotIncomingMessage({ message: rm });
-                return;
-              }
-
-              // 2. Nova mensagem chegou com o resultado veicular
-              if (rm.id !== message.id && rmText) {
-                const cleanPlate = (q.cleanedTarget || q.queryParam).replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-                if (
-                  rmText.toLowerCase().includes(cleanPlate) || 
-                  /dados\s+do\s+ve[íi]culo|chassi|renavam|propriet[áa]rio|marca\s*[\/:]/i.test(rmText)
-                ) {
-                  console.log(`[GramJS] 🚗 Nova mensagem veicular detectada para placa ${q.queryParam}!`);
-                  await handleUserbotIncomingMessage({ message: rm });
-                  return;
-                }
-              }
-            }
-          } catch (pollErr: any) {
-            console.warn('[GramJS] Polling pós-seleção de base:', pollErr?.message);
-          }
+        // Timer de auto-seleção (25s) caso o usuário não clique em nenhum botão na UI
+        if ((q as any).selectionFallbackTimer) {
+          clearTimeout((q as any).selectionFallbackTimer);
         }
+        (q as any).selectionFallbackTimer = setTimeout(async () => {
+          if (activeQueries.has(targetRequestId)) {
+            const currentQ = activeQueries.get(targetRequestId)!;
+            if (currentQ.status === 'waiting_selection' && !currentQ.selectedOption) {
+              const bestOpt = pickBestSelectionButton(inlineButtons, currentQ.moduleType, currentQ.queryParam);
+              console.log(`[GramJS] ⏰ Auto-selecionando base padrão "${bestOpt.text}" após 25s para ${targetRequestId}...`);
+              await executeOptionSelection(targetRequestId, bestOpt.text, bestOpt.rowIndex, bestOpt.colIndex);
+            }
+          }
+        }, 25000);
 
-        return; // Não finaliza a consulta aqui! Aguarda eventos NewMessage ou EditedMessage subsequentes.
+        return; // Aguarda a seleção do usuário via frontend ou o fallback
+      }
+
+      // 1.8 VERIFICAÇÃO CRUCIAL DE ERRO INTERNO DO BOT (ex: "❌ Erro interno \n Use /start para recomeçar.")
+      if (isBotInternalErrorMessage(incomingText)) {
+        console.warn(`[GramJS] ⚠️ Robô Telegram reportou erro interno para ${targetRequestId}: "${incomingText.replace(/\n/g, ' ')}"`);
+        q.status = 'error';
+        (q as any).hasInternalError = true;
+        (q as any).needsRestart = true;
+        (q as any).errorMessage = 'O servidor retornou erro. Por favor tente novamente em 10 segundos.';
+        (q as any).rawResponse = incomingText;
+        (q as any).durationMs = Date.now() - q.timestamp;
+
+        queryHistory.unshift({ ...q });
+        if (queryHistory.length > 200) queryHistory.pop();
+        activeQueries.delete(targetRequestId);
+        if (q.telegramMessageId) queryByTelegramMsgId.delete(q.telegramMessageId);
+
+        io.to(q.socketId).emit('query:response', {
+          ...q,
+          status: 'error',
+          hasInternalError: true,
+          needsRestart: true,
+          errorMessage: 'O servidor retornou erro. Por favor tente novamente em 10 segundos.',
+          rawResponse: incomingText,
+        });
+        io.emit('query:completed_broadcast', {
+          ...q,
+          status: 'error',
+          hasInternalError: true,
+          needsRestart: true,
+          errorMessage: 'O servidor retornou erro. Por favor tente novamente em 10 segundos.',
+        });
+        return;
       }
 
       // 2. VERIFICAÇÃO CRUCIAL: Mensagem intermediária / temporária de status (ex: "📍 CONSULTANDO ENDEREÇO...", "⏳ Processando...")
@@ -1327,6 +1720,31 @@ async function initUserbot(customSession?: string) {
         console.warn('[GramJS] Aviso ao pré-resolver @Hgliopk00bot:', pErr?.message);
       }
 
+      // Pré-aquece a resolução do bot KREX diretamente no servidor do Telegram
+      try {
+        console.log('[GramJS] Pré-resolvendo KREX via RPC nos servidores do Telegram...');
+        const krexRes: any = await client.invoke(new Api.contacts.ResolveUsername({ username: 'KREX' }));
+        if (krexRes?.users?.[0]) {
+          const ku = krexRes.users[0];
+          console.log(`[GramJS] KREX pré-resolvido com sucesso! ID: ${ku.id}`);
+          cachedZyrexBotPeer = new Api.InputPeerUser({
+            userId: ku.id,
+            accessHash: ku.accessHash,
+          });
+        }
+      } catch (kErr: any) {
+        try {
+          const fallbackRes: any = await client.invoke(new Api.contacts.ResolveUsername({ username: 'ZyrexBuscasBot' }));
+          if (fallbackRes?.users?.[0]) {
+            const zu = fallbackRes.users[0];
+            cachedZyrexBotPeer = new Api.InputPeerUser({
+              userId: zu.id,
+              accessHash: zu.accessHash,
+            });
+          }
+        } catch {}
+      }
+
       attachUserbotListener(client);
       broadcastSystemStatus();
       return { success: true, profile: userbotProfile };
@@ -1346,7 +1764,7 @@ async function initUserbot(customSession?: string) {
     } else {
       lastUserbotError = rawMsg;
     }
-    console.error('[GramJS] Erro ao conectar userbot:', lastUserbotError);
+    console.error('[GramJS] Erro ao conectar userbot:', lastUserbotError, err?.stack || err);
     broadcastSystemStatus();
     return { success: false, error: lastUserbotError };
   } finally {
@@ -1356,9 +1774,20 @@ async function initUserbot(customSession?: string) {
 
 initUserbot();
 
-async function dispatchToTelegram(record: ConsultationState & { isPro?: boolean }) {
-  // Vacina de Roteamento: Detecta se é Pro por flag explícita ou prefixo no módulo
-  const isPro = Boolean(
+async function dispatchToTelegram(record: ConsultationState & { isPro?: boolean; isZyrex?: boolean; isKrex?: boolean }) {
+  // Vacina de Roteamento: Detecta se é KREX/Zyrex ou Pro
+  const isZyrex = Boolean(
+    (record as any).isZyrex === true ||
+    (record as any).isKrex === true ||
+    String(record.moduleType).toLowerCase().startsWith('zyrex') ||
+    String(record.moduleType).toLowerCase().startsWith('krex') ||
+    String((record as any).botTarget).toLowerCase() === 'zyrex' ||
+    String((record as any).botTarget).toLowerCase() === 'krex'
+  );
+  (record as any).isZyrex = isZyrex;
+  (record as any).isKrex = isZyrex;
+
+  const isPro = !isZyrex && Boolean(
     record.isPro === true ||
     String(record.moduleType).toLowerCase().startsWith('pro') ||
     String(record.moduleType).toLowerCase().includes('pro')
@@ -1366,19 +1795,26 @@ async function dispatchToTelegram(record: ConsultationState & { isPro?: boolean 
   record.isPro = isPro;
 
   if (!record.queryParam || !record.queryParam.trim()) {
-    return { sent: false, commandText: '', error: 'Parâmetro de busca não pode ser vazio.', isPro, targetChatId: isPro ? TELEGRAM_CHAT_ID_PRO : TELEGRAM_CHAT_ID_OLD };
+    const defaultTarget = isZyrex ? TELEGRAM_CHAT_ID_KREX : (isPro ? TELEGRAM_CHAT_ID_PRO : TELEGRAM_CHAT_ID_OLD);
+    return { sent: false, commandText: '', error: 'Parâmetro de busca não pode ser vazio.', isPro, isZyrex, isKrex: isZyrex, targetChatId: defaultTarget };
   }
 
   // Garante formatação 100% limpa (ex: /telefone e não /protelefone; /cpf e não /procpf; /foto e não /profoto)
   const commandText = formatTelegramCommandMessage(record);
   record.telegramCommand = commandText;
   
-  // ROTEAMENTO RÍGIDO: Se isPro for true, o destino é EXCLUSIVAMENTE TELEGRAM_CHAT_ID_PRO (@Hgliopk00bot)
-  // Se não houver bot antigo configurado, envia também para TELEGRAM_CHAT_ID_PRO
-  const targetChatId = isPro ? TELEGRAM_CHAT_ID_PRO : (TELEGRAM_CHAT_ID_OLD || TELEGRAM_CHAT_ID_PRO);
+  // ROTEAMENTO RÍGIDO:
+  // Se for KREX/Zyrex: EXCLUSIVAMENTE TELEGRAM_CHAT_ID_KREX (KREX)
+  // Se for Pro: EXCLUSIVAMENTE TELEGRAM_CHAT_ID_PRO (@Hgliopk00bot)
+  // Caso contrário: TELEGRAM_CHAT_ID_OLD ou TELEGRAM_CHAT_ID_PRO
+  const targetChatId = isZyrex
+    ? TELEGRAM_CHAT_ID_KREX
+    : (isPro ? TELEGRAM_CHAT_ID_PRO : (TELEGRAM_CHAT_ID_OLD || TELEGRAM_CHAT_ID_PRO));
   (record as any).targetChatId = targetChatId;
   
-  if (isPro) {
+  if (isZyrex) {
+    console.log(`[ROTEAMENTO KREX] ⚡ Direcionando busca KREX (${record.moduleType}) EXCLUSIVAMENTE para -> ${targetChatId} com comando: "${commandText}"`);
+  } else if (isPro) {
     console.log(`[ROTEAMENTO PRO] 💎 Direcionando busca avançada PRO (${record.moduleType}) EXCLUSIVAMENTE para -> ${targetChatId} (${TARGET_BOT_PRO_ID_NUM}) com comando: "${commandText}"`);
   } else {
     console.log(`[ROTEAMENTO PADRÃO] ⚡ Direcionando busca NORMAL (${record.moduleType}) para -> ${targetChatId} com comando: "${commandText}"`);
@@ -1389,11 +1825,11 @@ async function dispatchToTelegram(record: ConsultationState & { isPro?: boolean 
       const peer = await resolveTelegramPeer(userbotClient, targetChatId);
       const sentMsg: any = await userbotClient.sendMessage(peer, { message: commandText });
       console.log(`[GramJS] Sucesso. Despachado para ${targetChatId}. Mensagem ID: ${sentMsg.id}`);
-      return { sent: true, messageId: sentMsg.id, commandText, targetChatId, isPro };
+      return { sent: true, messageId: sentMsg.id, commandText, targetChatId, isPro, isZyrex, isKrex: isZyrex };
     } catch (err: any) { 
       console.error(`[GramJS] Falha ao despachar para ${targetChatId}:`, err?.message || err);
       // Tentativa de recuperação de emergência para o bot PRO via ID numérico direto
-      if (isPro || !TELEGRAM_CHAT_ID_OLD) {
+      if (isPro && !isZyrex) {
         try {
           console.log(`[GramJS] Tentando fallback para ID numérico ${TARGET_BOT_PRO_ID_NUM}...`);
           const numPeer = await userbotClient.getInputEntity(TARGET_BOT_PRO_ID_NUM);
@@ -1414,9 +1850,136 @@ async function dispatchToTelegram(record: ConsultationState & { isPro?: boolean 
     isFallback: true, 
     messageId: Math.floor(Date.now() / 1000) + Math.floor(Math.random() * 10000), 
     commandText, 
-    targetChatId: isPro ? TELEGRAM_CHAT_ID_PRO : (TELEGRAM_CHAT_ID_OLD || 'BRDATA_CORE'), 
-    isPro 
+    targetChatId: isZyrex ? TELEGRAM_CHAT_ID_KREX : (isPro ? TELEGRAM_CHAT_ID_PRO : (TELEGRAM_CHAT_ID_OLD || 'BRDATA_CORE')), 
+    isPro,
+    isZyrex,
+    isKrex: isZyrex,
   };
+}
+
+// Função para reiniciar o robô com /start e imediatamente continuar a busca
+async function executeRestartAndRetry(options: {
+  moduleType: string;
+  queryParam: string;
+  isZyrex?: boolean;
+  isKrex?: boolean;
+  isPro?: boolean;
+  socketId?: string;
+}) {
+  const { moduleType, queryParam, socketId } = options;
+  const isZyrex = Boolean(
+    options.isZyrex === true ||
+    options.isKrex === true ||
+    String(moduleType).toLowerCase().startsWith('zyrex') ||
+    String(moduleType).toLowerCase().startsWith('krex') ||
+    String(moduleType).toLowerCase().includes('zyrex') ||
+    String(moduleType).toLowerCase().includes('krex')
+  );
+  const isPro = !isZyrex && Boolean(
+    options.isPro === true ||
+    String(moduleType).toLowerCase().startsWith('pro') ||
+    String(moduleType).toLowerCase().includes('pro')
+  );
+
+  const targetChatId = isZyrex 
+    ? TELEGRAM_CHAT_ID_KREX 
+    : (isPro ? TELEGRAM_CHAT_ID_PRO : (TELEGRAM_CHAT_ID_OLD || TELEGRAM_CHAT_ID_PRO));
+
+  console.log(`[GramJS] 🔄 EXECUTANDO REINÍCIO COM /start para ${targetChatId} antes de continuar busca (${moduleType} -> ${queryParam})...`);
+
+  // 1. Notifica o cliente via socket
+  if (socketId) {
+    io.to(socketId).emit('query:progress', {
+      message: `Enviando comando /start para reiniciar o robô (${targetChatId})...`,
+      status: 'restarting_bot',
+    });
+  }
+
+  // 2. Envia /start para o robô no Telegram
+  if (userbotClient && userbotStatus === 'connected') {
+    try {
+      const peer = await resolveTelegramPeer(userbotClient, targetChatId);
+      await userbotClient.sendMessage(peer, { message: '/start' });
+      console.log(`[GramJS] ✅ Comando /start despachado com sucesso para ${targetChatId}!`);
+    } catch (startErr: any) {
+      console.warn(`[GramJS] Aviso ao enviar /start para ${targetChatId}:`, startErr?.message);
+    }
+  }
+
+  // 3. Aguarda 1.8 segundos para o robô resetar seu estado
+  if (socketId) {
+    io.to(socketId).emit('query:progress', {
+      message: `Robô reiniciado com sucesso! Continuando busca para "${queryParam}"...`,
+      status: 'processing',
+    });
+  }
+  await new Promise((r) => setTimeout(r, 1800));
+
+  // 4. Cria e despacha a consulta real
+  const requestId = `REQ-${Date.now().toString().slice(-4)}${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+  let { command, cleanParam, fullMessage } = getTelegramCommand(moduleType, queryParam);
+  command = command.replace(/^\/(pro|zyrex|krex)[_\s]*/i, '/');
+  if (command === '/' || !command) {
+    command = isZyrex || isPro ? '/cpf' : '/cpf1';
+  }
+  fullMessage = cleanParam ? `${command} ${cleanParam}`.trim() : command;
+
+  const record: ConsultationState & { isPro?: boolean; isZyrex?: boolean; isKrex?: boolean; hasInternalError?: boolean } = {
+    id: requestId, 
+    socketId: socketId || '', 
+    moduleType, 
+    moduleTitle: MODULE_NAMES[moduleType] || (isZyrex ? `BUSCAS KREX - ${moduleType}` : (isPro ? `BUSCAS PRO - ${moduleType}` : moduleType)),
+    queryParam: queryParam.trim(), 
+    cleanedTarget: cleanParam, 
+    telegramCommand: fullMessage,
+    timestamp: Date.now(), 
+    status: 'pending',
+    isPro,
+    isZyrex,
+    isKrex: isZyrex,
+  };
+  activeQueries.set(requestId, record);
+
+  const dispatchResult = await dispatchToTelegram(record);
+  if (dispatchResult.sent && dispatchResult.messageId) {
+    record.telegramMessageId = dispatchResult.messageId; 
+    record.status = 'processing';
+    queryByTelegramMsgId.set(dispatchResult.messageId, requestId);
+
+    if (socketId) {
+      io.to(socketId).emit('query:ack', { 
+        requestId, 
+        status: 'processing', 
+        record, 
+        telegramCommand: fullMessage, 
+        isPro, 
+        isZyrex,
+        message: 'Robô reiniciado com /start! Aguardando retorno da consulta...' 
+      });
+    }
+
+    if ((dispatchResult as any).isFallback) {
+      setTimeout(() => {
+        const fallbackText = getSampleResponseForQuery(moduleType as any, queryParam);
+        handleIncomingTelegramResponse(requestId, fallbackText, { simulated: true });
+      }, 1300 + Math.floor(Math.random() * 500));
+    }
+
+    return { ok: true, requestId, status: 'processing', record };
+  } else {
+    record.status = 'failed';
+    record.error = dispatchResult.error || 'Falha ao despachar mensagem ao barramento.';
+    if (socketId) {
+      io.to(socketId).emit('query:error', {
+        requestId,
+        error: record.error,
+        userbotStatus,
+        lastError: lastUserbotError,
+        requiresReconnect: true,
+      });
+    }
+    return { ok: false, requestId, error: record.error };
+  }
 }
 
 io.on('connection', (socket) => {
@@ -1428,6 +1991,8 @@ io.on('connection', (socket) => {
     lastUserbotError,
     userbotProfile,
     targetProBot: TELEGRAM_CHAT_ID_PRO,
+    targetKrexBot: TELEGRAM_CHAT_ID_KREX,
+    targetZyrexBot: TELEGRAM_CHAT_ID_KREX,
     targetOldBot: TELEGRAM_CHAT_ID_OLD,
     hasToken: Boolean(TELEGRAM_API_ID && TELEGRAM_API_HASH),
     hasChatId: Boolean(TELEGRAM_CHAT_ID_OLD),
@@ -1438,37 +2003,47 @@ io.on('connection', (socket) => {
     phoneNumber: TELEGRAM_PHONE_NUMBER,
   });
 
-  socket.on('query:request', async (payload: { moduleType: string; queryParam: string; isPro?: boolean }) => {
+  socket.on('query:request', async (payload: { moduleType: string; queryParam: string; isPro?: boolean; isZyrex?: boolean; isKrex?: boolean }) => {
     const { moduleType, queryParam } = payload;
     if (!moduleType || !queryParam) return;
     
-    // Identificação infalível de modo PRO
-    const isPro = Boolean(
+    // Identificação infalível de modo KREX ou PRO
+    const isZyrex = Boolean(
+      payload.isZyrex === true ||
+      payload.isKrex === true ||
+      String(moduleType).toLowerCase().startsWith('zyrex') ||
+      String(moduleType).toLowerCase().startsWith('krex') ||
+      String(moduleType).toLowerCase().includes('zyrex') ||
+      String(moduleType).toLowerCase().includes('krex')
+    );
+    const isPro = !isZyrex && Boolean(
       payload.isPro === true || 
       String(moduleType).toLowerCase().startsWith('pro') || 
       String(moduleType).toLowerCase().includes('pro')
     );
     const requestId = `REQ-${Date.now().toString().slice(-4)}${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
     
-    // Gera comando limpo e assegura ausência total de /pro
+    // Gera comando limpo e assegura ausência total de /pro, /zyrex ou /krex
     let { command, cleanParam, fullMessage } = getTelegramCommand(moduleType, queryParam);
-    command = command.replace(/^\/pro[_\s]*/i, '/');
+    command = command.replace(/^\/(pro|zyrex|krex)[_\s]*/i, '/');
     if (command === '/' || !command) {
-      command = isPro ? '/cpf' : '/cpf1';
+      command = isZyrex || isPro ? '/cpf' : '/cpf1';
     }
     fullMessage = cleanParam ? `${command} ${cleanParam}`.trim() : command;
 
-    const record: ConsultationState & { isPro?: boolean } = {
+    const record: ConsultationState & { isPro?: boolean; isZyrex?: boolean; isKrex?: boolean } = {
       id: requestId, 
       socketId: socket.id, 
       moduleType, 
-      moduleTitle: MODULE_NAMES[moduleType] || (isPro ? `BUSCAS PRO - ${moduleType}` : moduleType),
+      moduleTitle: MODULE_NAMES[moduleType] || (isZyrex ? `BUSCAS KREX - ${moduleType}` : (isPro ? `BUSCAS PRO - ${moduleType}` : moduleType)),
       queryParam: queryParam.trim(), 
       cleanedTarget: cleanParam, 
       telegramCommand: fullMessage,
       timestamp: Date.now(), 
       status: 'pending',
       isPro,
+      isZyrex,
+      isKrex: isZyrex,
     };
     activeQueries.set(requestId, record);
 
@@ -1483,6 +2058,7 @@ io.on('connection', (socket) => {
         record, 
         telegramCommand: fullMessage, 
         isPro, 
+        isZyrex,
         message: 'Solicitação despachada com sucesso! Aguardando retorno da base...' 
       });
 
@@ -1503,7 +2079,7 @@ io.on('connection', (socket) => {
         requiresReconnect: true,
       });
     }
-    io.emit('telegram:query_created', { ...record, dispatchResult, userbotStatus, isPro });
+    io.emit('telegram:query_created', { ...record, dispatchResult, userbotStatus, isPro, isZyrex });
   });
 
   socket.on('telegram:simulate_reply', async (payload) => {
@@ -1512,17 +2088,79 @@ io.on('connection', (socket) => {
       handleIncomingTelegramResponse(targetRequestId, payload.responseText, { simulated: true });
     }
   });
+
+  // Listener para seleção de opção/base de dados pelo usuário
+  socket.on('query:select_option', async (payload: { requestId: string; optionText: string; rowIndex?: number; colIndex?: number }) => {
+    if (!payload?.requestId || !payload?.optionText) {
+      console.warn('[Socket.io] query:select_option recebido sem requestId ou optionText válido');
+      return;
+    }
+    console.log(`[Socket.io] 🎯 Seleção de base recebida: "${payload.optionText}" para req: ${payload.requestId}`);
+    const result = await executeOptionSelection(payload.requestId, payload.optionText, payload.rowIndex, payload.colIndex);
+    socket.emit('query:option_selected_ack', { ...payload, ...result });
+  });
+
+  // Listener para reiniciar com /start e retentar a consulta
+  socket.on('query:restart_and_retry', async (payload: { moduleType: string; queryParam: string; isPro?: boolean; isZyrex?: boolean }) => {
+    const { moduleType, queryParam } = payload;
+    if (!moduleType || !queryParam) return;
+    try {
+      console.log(`[Socket.io] 🔄 Recebida solicitação de /start e retentativa de busca: ${moduleType} -> ${queryParam}`);
+      await executeRestartAndRetry({
+        moduleType,
+        queryParam,
+        isPro: payload.isPro,
+        isZyrex: payload.isZyrex,
+        socketId: socket.id,
+      });
+    } catch (err: any) {
+      console.error('[Socket.io] Falha em executeRestartAndRetry:', err);
+      socket.emit('query:response', {
+        id: `REQ-ERR-${Date.now().toString().slice(-4)}`,
+        status: 'error',
+        hasInternalError: true,
+        needsRestart: true,
+        errorMessage: 'O servidor retornou erro. Por favor tente novamente em 10 segundos.',
+      });
+    }
+  });
 });
 
 function handleIncomingTelegramResponse(requestId: string, rawText: string, meta?: any) {
   const record = activeQueries.get(requestId);
   if (!record) return null;
 
+  const cleaned = cleanTelegramRawResponse(rawText);
+
+  // Se a mensagem for puramente transitória e sem erro interno, não deve finalizar a consulta prematuramente!
+  if (isTransientProgressMessage(cleaned) && !isBotInternalErrorMessage(cleaned)) {
+    console.log(`[handleIncomingTelegramResponse] ⏳ Mensagem transitória detectada ("${cleaned.slice(0, 35)}"). Mantendo consulta ativa...`);
+    record.status = 'processing';
+    io.to(record.socketId).emit('query:progress', {
+      id: requestId,
+      message: cleaned,
+      status: 'processing',
+    });
+    return record;
+  }
+
   const now = Date.now();
-  record.status = 'completed'; 
   record.durationMs = now - record.timestamp;
-  record.rawResponse = cleanTelegramRawResponse(rawText);
+  record.rawResponse = cleaned;
   record.exactMatch = checkTelegramExactMatch(record.queryParam, record.moduleType, record.rawResponse, record.telegramCommand);
+
+  // Se o robô retornou erro interno (ex: "❌ Erro interno \n Use /start para recomeçar.")
+  if (isBotInternalErrorMessage(cleaned)) {
+    record.status = 'error';
+    (record as any).hasInternalError = true;
+    (record as any).needsRestart = true;
+    (record as any).errorMessage = 'O servidor retornou erro. Por favor tente novamente em 10 segundos.';
+  } else {
+    record.status = 'completed';
+    (record as any).hasInternalError = false;
+    (record as any).needsRestart = false;
+    (record as any).errorMessage = undefined;
+  }
 
   // Se recebemos arquivo TXT direto do bot
   if (meta?.txtContent) {
@@ -1785,6 +2423,28 @@ app.post('/api/query/:id/fetch-photo', async (req, res) => {
   return res.json({ ok: false, message: 'Nenhuma foto encontrada nas mensagens recentes.' });
 });
 
+// Endpoint dedicado para seleção de base de dados interativa
+app.post('/api/query/select-option', async (req, res) => {
+  const { requestId, optionText, rowIndex, colIndex } = req.body;
+  if (!requestId || !optionText) {
+    return res.status(400).json({ ok: false, error: 'requestId e optionText são obrigatórios.' });
+  }
+
+  const result = await executeOptionSelection(requestId, optionText, rowIndex, colIndex);
+  return res.json(result);
+});
+
+app.post('/api/query/:id/select-option', async (req, res) => {
+  const { id } = req.params;
+  const { optionText, rowIndex, colIndex } = req.body;
+  if (!optionText) {
+    return res.status(400).json({ ok: false, error: 'optionText é obrigatório.' });
+  }
+
+  const result = await executeOptionSelection(id, optionText, rowIndex, colIndex);
+  return res.json(result);
+});
+
 // Endpoint para clicar manualmente em qualquer botão inline de uma consulta (ex: trocar de base veicular)
 app.post('/api/query/:id/click-button', async (req, res) => {
   const { id } = req.params;
@@ -1923,6 +2583,20 @@ app.post('/api/telegram/auth/send-code', async (req, res) => {
     pendingAuthClient = tempClient;
     pendingAuthPhoneNumber = phone;
     pendingAuthPhoneCodeHash = result.phoneCodeHash;
+
+    // Salva estado de autenticação pendente em disco para resistir a eventuais reinicializações do dev server
+    try {
+      const savedTempSession = tempClient.session.save() as unknown as string;
+      fs.writeFileSync('/tmp/pending_telegram_auth.json', JSON.stringify({
+        sessionStr: savedTempSession,
+        phone,
+        phoneCodeHash: result.phoneCodeHash,
+        timestamp: Date.now(),
+      }));
+    } catch (persistErr) {
+      console.warn('Erro ao persistir sessão temporária em disco:', persistErr);
+    }
+
     userbotStatus = 'awaiting_code';
     broadcastSystemStatus();
     return res.json({ ok: true, phoneCodeHash: result.phoneCodeHash, message: `Código de verificação enviado para ${phone}` });
@@ -1937,6 +2611,23 @@ app.post('/api/telegram/auth/send-code', async (req, res) => {
 app.post('/api/telegram/auth/sign-in', async (req, res) => {
   const code = (req.body.phoneCode || '').trim();
   const password = (req.body.password || '').trim();
+
+  // Tenta restaurar do disco se o processo tiver reiniciado
+  if (!pendingAuthClient && fs.existsSync('/tmp/pending_telegram_auth.json')) {
+    try {
+      const diskState = JSON.parse(fs.readFileSync('/tmp/pending_telegram_auth.json', 'utf8'));
+      if (diskState.sessionStr && diskState.phoneCodeHash && Date.now() - diskState.timestamp < 15 * 60 * 1000) {
+        pendingAuthClient = new TelegramClient(new StringSession(diskState.sessionStr), TELEGRAM_API_ID, TELEGRAM_API_HASH, { connectionRetries: 3 });
+        try { pendingAuthClient.setLogLevel('none' as any); } catch {}
+        await pendingAuthClient.connect();
+        pendingAuthPhoneNumber = diskState.phone;
+        pendingAuthPhoneCodeHash = diskState.phoneCodeHash;
+      }
+    } catch (restoreErr) {
+      console.warn('Falha ao restaurar sessão temporária do disco:', restoreErr);
+    }
+  }
+
   if (!code || !pendingAuthClient) return res.status(400).json({ error: 'Fluxo expirado ou código ausente. Solicite o código novamente.' });
 
   try {
@@ -1962,6 +2653,7 @@ app.post('/api/telegram/auth/sign-in', async (req, res) => {
 
     const savedSession = pendingAuthClient.session.save() as unknown as string;
     persistStringSession(savedSession);
+    try { fs.unlinkSync('/tmp/pending_telegram_auth.json'); } catch {}
     
     userbotClient = pendingAuthClient;
     userbotStatus = 'connected';
@@ -2189,6 +2881,106 @@ app.get('/api/history', (req, res) => {
   res.json({ records: queryHistory });
 });
 
+app.post('/api/query/request', async (req, res) => {
+  const { moduleType, queryParam } = req.body;
+  if (!moduleType || !queryParam) {
+    return res.status(400).json({ ok: false, error: 'Parâmetros inválidos' });
+  }
+
+  const isZyrex = Boolean(
+    req.body.isZyrex === true ||
+    req.body.isKrex === true ||
+    String(moduleType).toLowerCase().startsWith('zyrex') ||
+    String(moduleType).toLowerCase().startsWith('krex') ||
+    String(moduleType).toLowerCase().includes('zyrex') ||
+    String(moduleType).toLowerCase().includes('krex')
+  );
+  const isPro = !isZyrex && Boolean(
+    req.body.isPro === true || 
+    String(moduleType).toLowerCase().startsWith('pro') || 
+    String(moduleType).toLowerCase().includes('pro')
+  );
+  const requestId = `REQ-${Date.now().toString().slice(-4)}${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+
+  let { command, cleanParam, fullMessage } = getTelegramCommand(moduleType, queryParam);
+  command = command.replace(/^\/(pro|zyrex|krex)[_\s]*/i, '/');
+  if (command === '/' || !command) {
+    command = isZyrex || isPro ? '/cpf' : '/cpf1';
+  }
+  fullMessage = cleanParam ? `${command} ${cleanParam}`.trim() : command;
+
+  const record: ConsultationState & { isPro?: boolean; isZyrex?: boolean; isKrex?: boolean } = {
+    id: requestId, 
+    socketId: '', 
+    moduleType, 
+    moduleTitle: MODULE_NAMES[moduleType] || (isZyrex ? `BUSCAS KREX - ${moduleType}` : (isPro ? `BUSCAS PRO - ${moduleType}` : moduleType)),
+    queryParam: queryParam.trim(), 
+    cleanedTarget: cleanParam, 
+    telegramCommand: fullMessage,
+    timestamp: Date.now(), 
+    status: 'pending',
+    isPro,
+    isZyrex,
+    isKrex: isZyrex,
+  };
+  activeQueries.set(requestId, record);
+
+  const dispatchResult = await dispatchToTelegram(record);
+  if (dispatchResult.sent && dispatchResult.messageId) {
+    record.telegramMessageId = dispatchResult.messageId; 
+    record.status = 'processing';
+    queryByTelegramMsgId.set(dispatchResult.messageId, requestId);
+
+    if ((dispatchResult as any).isFallback) {
+      setTimeout(() => {
+        const fallbackText = getSampleResponseForQuery(moduleType as any, queryParam);
+        handleIncomingTelegramResponse(requestId, fallbackText, { simulated: true });
+      }, 1300 + Math.floor(Math.random() * 500));
+    }
+    return res.json({ ok: true, requestId, status: 'processing', record });
+  } else {
+    record.status = 'failed';
+    record.error = dispatchResult.error || 'Falha ao despachar mensagem ao barramento.';
+    return res.status(500).json({ ok: false, requestId, error: record.error, userbotStatus });
+  }
+});
+
+app.post('/api/telegram/restart-and-retry', async (req, res) => {
+  const { moduleType, queryParam, socketId } = req.body;
+  if (!moduleType || !queryParam) {
+    return res.status(400).json({ ok: false, error: 'Parâmetros inválidos' });
+  }
+
+  const isZyrex = Boolean(
+    req.body.isZyrex === true ||
+    req.body.isKrex === true ||
+    String(moduleType).toLowerCase().startsWith('zyrex') ||
+    String(moduleType).toLowerCase().startsWith('krex') ||
+    String(moduleType).toLowerCase().includes('zyrex') ||
+    String(moduleType).toLowerCase().includes('krex')
+  );
+  const isPro = !isZyrex && Boolean(
+    req.body.isPro === true || 
+    String(moduleType).toLowerCase().startsWith('pro') || 
+    String(moduleType).toLowerCase().includes('pro')
+  );
+
+  try {
+    const result = await executeRestartAndRetry({
+      moduleType,
+      queryParam,
+      isZyrex,
+      isKrex: isZyrex,
+      isPro,
+      socketId,
+    });
+    return res.json(result);
+  } catch (err: any) {
+    console.error('[API] Erro ao reiniciar com /start e retentar:', err);
+    return res.status(500).json({ ok: false, error: err?.message || 'Erro ao reiniciar robô e retentar busca' });
+  }
+});
+
 app.get('/api/system/status', (req, res) => {
   res.json({
     status: 'ok',
@@ -2197,6 +2989,8 @@ app.get('/api/system/status', (req, res) => {
     lastUserbotError,
     userbotProfile,
     targetProBot: TELEGRAM_CHAT_ID_PRO,
+    targetKrexBot: TELEGRAM_CHAT_ID_KREX,
+    targetZyrexBot: TELEGRAM_CHAT_ID_KREX,
     targetOldBot: TELEGRAM_CHAT_ID_OLD,
     hasToken: Boolean(TELEGRAM_API_ID && TELEGRAM_API_HASH),
     hasChatId: Boolean(TELEGRAM_CHAT_ID_OLD),
@@ -2215,7 +3009,9 @@ async function startServer() {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: 'spa' });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    const distPath = fs.existsSync(path.join(process.cwd(), 'dist'))
+      ? path.join(process.cwd(), 'dist')
+      : path.join(process.cwd(), 'build');
     app.use(express.static(distPath));
     app.get('*', (req, res) => res.sendFile(path.join(distPath, 'index.html')));
   }

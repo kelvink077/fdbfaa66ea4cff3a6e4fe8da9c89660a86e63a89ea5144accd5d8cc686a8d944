@@ -391,6 +391,14 @@ export const ReportCard: React.FC<ReportCardProps> = ({ record, onNewSearch }) =
             {record.moduleTitle}
           </span>
 
+          {/* Base Selecionada */}
+          {record.selectedOption && (
+            <span className="rf-badge rf-badge-emerald flex items-center gap-1.5 font-bold">
+              <Database className="w-3 h-3 text-[#10b981]" />
+              BASE: {record.selectedOption.toUpperCase()}
+            </span>
+          )}
+
           {/* Target searched */}
           <div className="rf-badge rf-badge-surface flex items-center gap-2">
             <span className="text-[#8fa3a1]">ALVO:</span>

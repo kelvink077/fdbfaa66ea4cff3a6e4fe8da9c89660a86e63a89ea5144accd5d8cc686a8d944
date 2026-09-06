@@ -34,31 +34,32 @@ export function getTelegramCommand(moduleType: string, queryParam: string): {
 } {
   const rawMod = (moduleType || '').toLowerCase().trim();
   const isPro = rawMod.startsWith('pro');
-  // Remove categoricamente qualquer prefixo pro_ ou pro do identificador do módulo
-  const mod = rawMod.replace(/^pro_?/, '').replace(/[^a-z0-9_]/g, '');
+  const isZyrex = rawMod.startsWith('zyrex') || rawMod.startsWith('krex');
+  // Remove categoricamente qualquer prefixo pro_, zyrex_ ou krex_ do identificador do módulo
+  const mod = rawMod.replace(/^(pro_|zyrex_|krex_)/, '').replace(/[^a-z0-9_]/g, '');
   let command = '/cpf1';
   let cleanParam = (queryParam || '').trim();
   let formattedParam = cleanParam;
 
-  // 1. 🆔 /cpf1, /cpf2, /cpf3 (Módulos Padrão de CPF) e /cpf (Módulo Pro VIP)
-  if (rawMod === 'cpf_1' || rawMod === 'cpf1' || (!isPro && (mod === 'cpf1' || mod === 'cpf_1'))) {
+  // 1. 🆔 /cpf1, /cpf2, /cpf3 e /cpf
+  if (rawMod === 'cpf_1' || rawMod === 'cpf1' || (!isPro && !isZyrex && (mod === 'cpf1' || mod === 'cpf_1'))) {
     command = '/cpf1';
     cleanParam = cleanParam.replace(/\D/g, '');
     formattedParam = cleanParam;
-  } else if (rawMod === 'cpf_2' || rawMod === 'cpf2' || (!isPro && (mod === 'cpf2' || mod === 'cpf_2'))) {
+  } else if (rawMod === 'cpf_2' || rawMod === 'cpf2' || (!isPro && !isZyrex && (mod === 'cpf2' || mod === 'cpf_2'))) {
     command = '/cpf2';
     cleanParam = cleanParam.replace(/\D/g, '');
     formattedParam = cleanParam;
-  } else if (rawMod === 'cpf_3' || rawMod === 'cpf3' || (!isPro && (mod === 'cpf3' || mod === 'cpf_3'))) {
+  } else if (rawMod === 'cpf_3' || rawMod === 'cpf3' || (!isPro && !isZyrex && (mod === 'cpf3' || mod === 'cpf_3'))) {
     command = '/cpf3';
     cleanParam = cleanParam.replace(/\D/g, '');
     formattedParam = cleanParam;
-  } else if (isPro && mod.includes('cpf')) {
+  } else if ((isPro || isZyrex) && mod === 'cpf') {
     command = '/cpf';
     cleanParam = cleanParam.replace(/\D/g, '');
     formattedParam = cleanParam;
   } else if (mod.includes('cpf')) {
-    command = '/cpf1';
+    command = isPro || isZyrex ? '/cpf' : '/cpf1';
     cleanParam = cleanParam.replace(/\D/g, '');
     formattedParam = cleanParam;
   }
@@ -75,18 +76,102 @@ export function getTelegramCommand(moduleType: string, queryParam: string): {
     formattedParam = cleanParam;
   }
   // 4. 👤 /nome Joao Silva Ramos (Busca pessoas pelo nome)
+  else if (mod === 'nome_nasc' || mod.includes('nomenasc')) {
+    command = '/nomenasc';
+    cleanParam = cleanParam.replace(/\s+/g, ' ').trim();
+    formattedParam = cleanParam;
+  }
+  else if (mod === 'nome_uf' || mod.includes('nomeuf')) {
+    command = '/nomeuf';
+    cleanParam = cleanParam.replace(/\s+/g, ' ').trim();
+    formattedParam = cleanParam;
+  }
   else if (mod.includes('nome')) {
     command = '/nome';
     cleanParam = cleanParam.replace(/\s+/g, ' ').trim();
     formattedParam = cleanParam;
   }
-  // 5. 📧 /email usuario@dominio.com (Vínculos do email + Score de qualidade)
+  // 5. 👨 /pai Jose Silva (Pai)
+  else if (mod.includes('pai')) {
+    command = '/pai';
+    cleanParam = cleanParam.replace(/\s+/g, ' ').trim();
+    formattedParam = cleanParam;
+  }
+  // 6. 👩 /mae Maria Silva (Mãe)
+  else if (mod.includes('mae')) {
+    command = '/mae';
+    cleanParam = cleanParam.replace(/\s+/g, ' ').trim();
+    formattedParam = cleanParam;
+  }
+  // 7. 🪪 /cin (CIN / NIS) ou /rg
+  else if (mod.includes('cin') || mod.includes('nis')) {
+    command = '/cin';
+    cleanParam = cleanParam.trim();
+    formattedParam = cleanParam;
+  }
+  else if (mod.includes('rg')) {
+    command = '/rg';
+    cleanParam = cleanParam.replace(/[^a-zA-Z0-9]/g, '').trim();
+    formattedParam = cleanParam;
+  }
+  // 8. 🚗 /cnh
+  else if (mod.includes('cnh')) {
+    command = '/cnh';
+    cleanParam = cleanParam.replace(/\D/g, '');
+    formattedParam = cleanParam;
+  }
+  // 9. 💰 /renda, /score, /poderaquis
+  else if (mod.includes('renda')) {
+    command = '/renda';
+    cleanParam = cleanParam.replace(/\D/g, '');
+    formattedParam = cleanParam;
+  }
+  else if (mod.includes('score')) {
+    command = '/score';
+    cleanParam = cleanParam.replace(/\D/g, '');
+    formattedParam = cleanParam;
+  }
+  else if (mod.includes('poderaquis') || mod.includes('poder_aquis')) {
+    command = '/poderaquis';
+    cleanParam = cleanParam.replace(/\D/g, '');
+    formattedParam = cleanParam;
+  }
+  // 10. 👥 /parentes
+  else if (mod.includes('parentes')) {
+    command = '/parentes';
+    cleanParam = cleanParam.trim();
+    formattedParam = cleanParam;
+  }
+  // 11. ⚡ /pix
+  else if (mod.includes('pix')) {
+    command = '/pix';
+    cleanParam = cleanParam.trim();
+    formattedParam = cleanParam;
+  }
+  // 12. 💼 /pis
+  else if (mod.includes('pis')) {
+    command = '/pis';
+    cleanParam = cleanParam.replace(/\D/g, '');
+    formattedParam = cleanParam;
+  }
+  // 13. 🌐 /ip
+  else if (mod.includes('ip')) {
+    command = '/ip';
+    cleanParam = cleanParam.trim();
+    formattedParam = cleanParam;
+  }
+  // 14. 📧 /email usuario@dominio.com
   else if (mod.includes('email') || mod.includes('mail')) {
     command = '/email';
     cleanParam = cleanParam.toLowerCase().trim();
     formattedParam = cleanParam;
   }
-  // 6. 📍 /endereco 01310100 ou /endereco SAO PAULO SP (Moradores do endereço/CEP)
+  // 15. 📍 /endereco e /cep
+  else if (mod.includes('cep')) {
+    command = '/cep';
+    cleanParam = cleanParam.replace(/\D/g, '');
+    formattedParam = cleanParam;
+  }
   else if (mod.includes('endereco')) {
     command = '/endereco';
     const trimmed = cleanParam.trim();
@@ -97,45 +182,28 @@ export function getTelegramCommand(moduleType: string, queryParam: string): {
     }
     formattedParam = cleanParam;
   }
-  // 7. 📍 /cep 01310100 (Logradouro, bairro, cidade, UF)
-  else if (mod.includes('cep')) {
-    command = '/cep';
-    cleanParam = cleanParam.replace(/\D/g, '');
-    formattedParam = cleanParam;
-  }
-  // 8. 🏢 /cnpj 12345678000190 (Razão social, sócios, situação)
+  // 16. 🏢 /cnpj
   else if (mod.includes('cnpj')) {
     command = '/cnpj';
     cleanParam = cleanParam.replace(/\D/g, '');
     formattedParam = cleanParam;
   }
-  // 9. 🗳️ /titulo 123456780191 (Dados do título de eleitor)
-  else if (mod.includes('titulo')) {
-    command = '/titulo';
-    cleanParam = cleanParam.replace(/\D/g, '');
-    formattedParam = cleanParam;
-  }
-  // 10. 👩👧👦 /mae Maria Silva Santos (Busca pelo nome da mãe)
-  else if (mod.includes('mae')) {
-    command = '/mae';
-    cleanParam = cleanParam.replace(/\s+/g, ' ').trim();
-    formattedParam = cleanParam;
-  }
-  // 11. 🚗 /placa AAA9999 (Relatório veicular completo)
+  // 17. 🚗 /placa
   else if (mod.includes('placa')) {
     command = '/placa';
     cleanParam = cleanParam.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
     formattedParam = cleanParam;
-  } else {
-    // Fallback absoluto: garante que NUNCA começa com pro
-    const base = mod.replace(/^pro_?/, '');
+  }
+  else {
+    // Fallback limpo sem prefixos
+    const base = mod.replace(/^(pro_|zyrex_|krex_)/, '');
     command = `/${base || 'cpf'}`;
     cleanParam = cleanParam.trim();
     formattedParam = cleanParam;
   }
 
-  // Vacina final absoluta: NUNCA permitir comandos com /pro_, /pro ou /pro[espaço]
-  command = command.replace(/^\/pro[_\s]*/i, '/');
+  // Vacina final absoluta: NUNCA permitir comandos com prefixos indesejados
+  command = command.replace(/^\/(pro|zyrex|krex)[_\s]*/i, '/');
   if (command === '/' || !command) {
     command = '/cpf';
   }

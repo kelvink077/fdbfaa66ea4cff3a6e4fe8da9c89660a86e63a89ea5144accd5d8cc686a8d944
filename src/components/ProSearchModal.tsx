@@ -479,7 +479,7 @@ export const ProSearchModal: React.FC<ProSearchModalProps> = ({
                   Processando Consulta no Ecossistema BUSCAS PRO
                 </h3>
                 <p className="text-xs text-[#cbfffc] font-mono mt-1 max-w-xl mx-auto">
-                  {loadingStepText || `Despachando comando ${selectedModule.command} para o Bot @Hgliopk00bot ➔ Aguardando retorno da base...`}
+                  {loadingStepText || `Despachando comando ${selectedModule.command} para o servidor SkynetbrDATA ➔ Aguardando retorno da base...`}
                 </p>
                 {loadingStepText && (loadingStepText.toLowerCase().includes('base') || loadingStepText.toLowerCase().includes('veicular')) && (
                   <div className="flex flex-wrap items-center justify-center gap-2 pt-2 animate-in fade-in">

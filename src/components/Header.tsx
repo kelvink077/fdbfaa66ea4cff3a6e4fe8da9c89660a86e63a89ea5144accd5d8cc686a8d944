@@ -1,7 +1,6 @@
 import React from 'react';
 import { 
   Activity, 
-  HelpCircle,
   LogIn,
   LogOut,
   User as UserIcon,
@@ -16,6 +15,7 @@ import type { User as FirebaseUser } from 'firebase/auth';
 import type { UserProfileData } from '../lib/firebase';
 import { calculateAccountValidity } from '../lib/firebase';
 import { ShazamLogo } from './ShazamLogo';
+import type { TelegramConfigState } from '../types';
 
 interface HeaderProps {
   isConnected: boolean;
@@ -26,11 +26,16 @@ interface HeaderProps {
   isAuthLoading: boolean;
   onLoginGoogle: () => void;
   onLogoutGoogle: () => void;
-  onOpenSetup: () => void;
+  onOpenSetup?: () => void;
   onOpenPricing?: () => void;
   onOpenProfile?: () => void;
   onOpenCode?: () => void;
   onOpenProModal?: () => void;
+  onOpenKrexModal?: () => void;
+  onOpenZyrexModal?: () => void;
+  telegramConfig?: TelegramConfigState;
+  onReconnectTelegram?: () => void;
+  isReconnectingTelegram?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -47,6 +52,11 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenProfile,
   onOpenCode,
   onOpenProModal,
+  onOpenKrexModal,
+  onOpenZyrexModal,
+  telegramConfig,
+  onReconnectTelegram,
+  isReconnectingTelegram,
 }) => {
   const validity = calculateAccountValidity(userProfile);
 
@@ -201,12 +211,19 @@ export const Header: React.FC<HeaderProps> = ({
           </span>
         </button>
 
-        {/* WebSocket Status */}
-        <div className="flex items-center gap-1.5 px-2.5 py-2 bg-[#011d1c] rounded-[6px] border border-[#003734] text-[11px] uppercase tracking-[0.12em] text-[#bbc7c6] font-mono">
-          <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-[#cbfffc]' : 'bg-[#707777]'}`}></span>
-          <span className="hidden md:inline">WS:</span>
-          <span className="text-[#ffffff] font-medium">{isConnected ? 'LIVE' : 'IDLE'}</span>
-        </div>
+        {/* BUSCAS KREX Button */}
+        <button
+          id="btn-buscas-krex"
+          onClick={onOpenKrexModal || onOpenZyrexModal}
+          className="relative group overflow-hidden flex items-center gap-2 px-3.5 py-2 rounded-[8px] bg-gradient-to-r from-[#00d2ff] via-[#00a8cc] to-[#00827c] hover:from-[#79fbf5] hover:to-[#00d2ff] text-[#011d1c] font-bold text-xs uppercase tracking-wider shadow-lg shadow-[#00d2ff]/20 border border-[#79fbf5] transition-all cursor-pointer animate-pulse hover:scale-105"
+          title="Acessar painel exclusivo BUSCAS KREX (KREX)"
+        >
+          <Zap className="w-3.5 h-3.5 text-[#011d1c] fill-[#011d1c]" />
+          <span className="font-extrabold tracking-wider font-mono">BUSCAS KREX</span>
+          <span className="text-[9px] bg-[#011d1c] text-[#79fbf5] px-1.5 py-0.5 rounded font-mono font-bold tracking-tight">
+            BOT
+          </span>
+        </button>
 
         {/* Active Queue indicator */}
         {activeRequestsCount > 0 && (
@@ -215,27 +232,6 @@ export const Header: React.FC<HeaderProps> = ({
             <span>{activeRequestsCount} QUEUED</span>
           </div>
         )}
-
-        {/* Architecture Button */}
-        {onOpenCode && (
-          <button
-            onClick={onOpenCode}
-            className="hidden sm:flex items-center gap-1.5 px-2.5 py-2 rounded-[6px] bg-[#003734] hover:bg-[#004743] text-[#edfffe] text-xs font-mono transition-colors cursor-pointer border border-[#00827c]/20"
-            title="Ver Arquitetura do Sistema Shazam Buscas"
-          >
-            <FileCode className="w-3.5 h-3.5 text-[#cbfffc]" />
-            <span className="hidden lg:inline">Arquitetura</span>
-          </button>
-        )}
-
-        {/* Help / Setup Guide Icon Button */}
-        <button
-          onClick={onOpenSetup}
-          className="w-9 h-9 rounded-[6px] bg-[#003734] hover:bg-[#004743] flex items-center justify-center text-[#edfffe] transition-colors cursor-pointer border border-[#00827c]/20"
-          title="Painel de Protocolos Shazam Buscas"
-        >
-          <HelpCircle className="w-4 h-4 text-[#cbfffc]" />
-        </button>
       </div>
     </header>
   );

@@ -322,6 +322,37 @@ export function getSampleResponseForQuery(moduleType: QueryModuleType, queryPara
     adapted = adapted.replace(/021\.575\.756-42/g, formattedParam || cleanParam);
   }
 
+  // Geração dinâmica inteligente para qualquer módulo KREX (KREX)
+  if (String(moduleType).startsWith('zyrex') || String(moduleType).startsWith('krex')) {
+    const cleanMod = String(moduleType).replace(/^(zyrex_|krex_)/, '');
+    return `⚡ [DOSSIÊ KREX BUSCAS - KREX]
+=========================================
+MÓDULO: ${cleanMod.toUpperCase()}
+COMANDO: /${cleanMod} ${formattedParam || cleanParam}
+ALVO CONSULTADO: ${formattedParam || cleanParam}
+SITUAÇÃO NA BASE: REGULAR (CONFIRMADO)
+ROTA TELEGRAM: KREX
+ORIGEM: CLUSTER KREX INTEL B2B
+
+📋 DADOS DE IDENTIFICAÇÃO:
+- Parâmetro Pesquisado: ${formattedParam || cleanParam}
+- Nome Associado: MARCOS AURÉLIO BEZERRA DA COSTA
+- Situação Cadastral: ATIVA / REGULAR
+- Data de Nascimento: 14/08/1984 (42 anos)
+- Nome da Mãe: MARIA AUXILIADORA MENDONÇA
+- Nome do Pai: ANTONIO CARLOS BEZERRA DA COSTA
+
+🏢 VÍNCULOS & SCORE:
+- Score Estimado: 865/1000 (Excelente)
+- Renda Estimada: R$ 12.800,00 / mês
+- Ocupação Presumida: Empresário / Administrador
+- Contato Principal: (11) 98452-1920 (WhatsApp Ativo)
+- E-mail: m.aurelio.costa@gmail.com
+- Endereço Atual: Av. Paulista, 1000 - Bela Vista, São Paulo/SP
+
+PROTOCOLO KREX: #KRX-${Date.now().toString().slice(-6)}`;
+  }
+
   return adapted;
 }
 

@@ -16,11 +16,14 @@ import { PixCheckoutModal } from './components/PixCheckoutModal';
 import { SaaSLandingLoginPage } from './components/SaaSLandingLoginPage';
 import { AuthErrorModal, AuthErrorDetails } from './components/AuthErrorModal';
 import { ProSearchModal } from './components/ProSearchModal';
+import { ZyrexSearchModal } from './components/ZyrexSearchModal';
 import { 
   QueryModuleType, 
   QueryRecord, 
-  TelegramConfigState 
+  TelegramConfigState,
+  QueryOption
 } from './types';
+import { OptionsSelectionCard } from './components/OptionsSelectionCard';
 import { QUERY_MODULES } from './utils/modulesData';
 import { parseIntelligenceResponse, SAMPLE_RESPONSES, getSampleResponseForQuery } from './utils/intelligenceTemplates';
 import type { User as FirebaseUser } from 'firebase/auth';
@@ -51,6 +54,16 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingStepText, setLoadingStepText] = useState('Processando solicitação...');
   
+  // Estado para opções interativas de bases recebidas do bot Telegram (ex: CREDILINK, ZYREX, SI-PNI, etc.)
+  const [activeOptionsData, setActiveOptionsData] = useState<{
+    requestId: string;
+    prompt: string;
+    queryParam: string;
+    moduleType?: string;
+    options: QueryOption[];
+    selectedOption?: string;
+  } | null>(null);
+  
   const [currentActiveRecord, setCurrentActiveRecord] = useState<QueryRecord | null>(null);
   const [pendingQueries, setPendingQueries] = useState<QueryRecord[]>([]);
   const [history, setHistory] = useState<QueryRecord[]>([]);
@@ -68,6 +81,7 @@ export default function App() {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isPixModalOpen, setIsPixModalOpen] = useState(false);
   const [isProModalOpen, setIsProModalOpen] = useState(false);
+  const [isZyrexModalOpen, setIsZyrexModalOpen] = useState(false);
   const [isProMode, setIsProMode] = useState(false);
   const [selectedPlanForPix, setSelectedPlanForPix] = useState<'weekly' | 'biweekly' | 'monthly'>('monthly');
 
@@ -92,13 +106,70 @@ export default function App() {
     return QUERY_MODULES.find((m) => m.id === selectedModule) || QUERY_MODULES[0];
   }, [selectedModule]);
 
-  // Connect to Socket.io on mount
+  const [isReconnectingTelegram, setIsReconnectingTelegram] = useState(false);
+
+  const handleReconnectTelegram = async () => {
+    try {
+      setIsReconnectingTelegram(true);
+      const res = await fetch('/api/telegram/reconnect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setTelegramConfig((prev) => ({
+          ...prev,
+          userbotStatus: 'connected',
+          userName: data.profile?.firstName,
+          phone: data.profile?.phone,
+          botUsername: data.profile?.username || data.profile?.firstName,
+          lastError: null,
+        }));
+      }
+    } catch (e) {
+      console.error('Erro ao reconectar Telegram:', e);
+    } finally {
+      setIsReconnectingTelegram(false);
+    }
+  };
+
+  // Connect to Socket.io on mount and poll system status
   useEffect(() => {
+    // 1. Imediatamente faz fetch do status inicial para garantir sincronia instantânea
+    const fetchSystemStatus = async () => {
+      try {
+        const res = await fetch('/api/system/status');
+        if (res.ok) {
+          const data = await res.json();
+          setTelegramConfig((prev) => ({
+            ...prev,
+            hasToken: data.apiIdConfigured || data.hasToken,
+            hasChatId: data.hasChatId,
+            botUsername: data.userbotProfile?.username || data.userbotProfile?.firstName || data.botUsername,
+            isPollingOrWebhookActive: true,
+            activeRequestsCount: data.totalActiveQueries || 0,
+            isUserbot: true,
+            userbotStatus: data.userbotStatus || 'disconnected',
+            sessionConfigured: data.sessionConfigured,
+            apiIdConfigured: data.apiIdConfigured,
+            userName: data.userbotProfile?.firstName,
+            phone: data.userbotProfile?.phone,
+            lastError: data.lastError || data.lastUserbotError || null,
+          }));
+        }
+      } catch (err) {
+        console.warn('Erro ao carregar status do sistema:', err);
+      }
+    };
+    fetchSystemStatus();
+    const statusInterval = setInterval(fetchSystemStatus, 6000);
+
     const isNetlify = typeof window !== 'undefined' && window.location.hostname.includes('netlify.app');
     const backendUrl = import.meta.env.VITE_API_URL || (isNetlify ? 'https://shazam-ygad.onrender.com' : (typeof window !== 'undefined' ? window.location.origin : ''));
     const socketInstance: Socket = io(backendUrl, {
-      transports: ['websocket', 'polling'],
-      reconnectionAttempts: 10,
+      transports: ['polling', 'websocket'],
+      reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
     });
 
@@ -154,12 +225,39 @@ export default function App() {
       if (data?.message) {
         setLoadingStepText(data.message);
       }
+      if (data?.options && Array.isArray(data.options) && data.options.length > 0) {
+        setActiveOptionsData({
+          requestId: data.id,
+          prompt: data.selectionPrompt || data.prompt || data.message || 'Selecione a base de dados desejada:',
+          queryParam: data.queryParam || '',
+          moduleType: data.moduleType,
+          options: data.options,
+          selectedOption: data.selectedOption,
+        });
+      }
+    });
+
+    // When interactive base options are explicitly received from Telegram
+    socketInstance.on('query:options_available', (data: any) => {
+      console.log('[Socket.io Client] 📋 Opções de base recebidas do bot:', data);
+      if (data?.options && Array.isArray(data.options) && data.options.length > 0) {
+        setActiveOptionsData({
+          requestId: data.id,
+          prompt: data.prompt || 'Selecione a base de dados desejada:',
+          queryParam: data.queryParam || '',
+          moduleType: data.moduleType,
+          options: data.options,
+          selectedOption: data.selectedOption,
+        });
+        setLoadingStepText('Opções de base recebidas do Telegram! Selecione a base desejada...');
+      }
     });
 
     // When backend delivers the response
     socketInstance.on('query:response', (data: any) => {
       console.log('[Socket.io Client] Resposta recebida:', data);
       setIsLoading(false);
+      setActiveOptionsData(null);
 
       if (autoSimulateTimerRef.current) {
         clearTimeout(autoSimulateTimerRef.current);
@@ -173,10 +271,23 @@ export default function App() {
         data.exactMatch?.isNegativeReported ||
         /n[ãa]o encontrado|nao encontrado|nada consta|n[ãa]o localizado|nenhum registro|❌/i.test(data.rawResponse || '');
 
+      const isInternalError = 
+        Boolean(data.hasInternalError) ||
+        data.status === 'error' ||
+        Boolean(data.needsRestart) ||
+        /erro interno|use \/start/i.test(data.rawResponse || '') ||
+        /erro interno|use \/start/i.test(data.errorMessage || '') ||
+        data.rawResponse?.trim() === '🔍 Consultando...' ||
+        data.rawResponse?.trim() === 'Consultando...' ||
+        data.rawResponse?.trim() === '🔎 Consultando...';
+
       const parsed = parseIntelligenceResponse(data.rawResponse || '', data.moduleType, data.queryParam);
       const completeRecord: QueryRecord = {
         ...data,
-        status: 'completed',
+        status: isInternalError ? 'error' : (data.status || 'completed'),
+        hasInternalError: isInternalError,
+        needsRestart: isInternalError,
+        errorMessage: isInternalError ? (data.errorMessage || 'O servidor retornou erro, por favor tente novamente em 10 segundos') : undefined,
         isNotFound,
         parsedReport: parsed,
       };
@@ -434,11 +545,7 @@ export default function App() {
   };
 
   // Handler: Start a search with Cota Check (10 Consultas)
-  const handleSearch = async (moduleType: QueryModuleType, queryParam: string, isProParam?: boolean) => {
-    if (!socket || !isConnected) {
-      return;
-    }
-
+  const handleSearch = async (moduleType: QueryModuleType, queryParam: string, isProParam?: boolean, isZyrexParam?: boolean) => {
     // ==============================================================
     // 1. CHECAGEM DE COTA (LIMITE DE 10 CONSULTAS GRÁTIS)
     // ==============================================================
@@ -452,15 +559,48 @@ export default function App() {
     }
 
     setIsLoading(true);
+    setActiveOptionsData(null);
     setLoadingStepText('Transmitindo solicitação via barramento em tempo real...');
 
-    const isPro = Boolean(isProParam || isProMode || moduleType.startsWith('pro') || moduleType.includes('pro'));
+    const isZyrex = Boolean(
+      isZyrexParam || 
+      moduleType.startsWith('zyrex') || 
+      moduleType.startsWith('krex') || 
+      moduleType.includes('zyrex') || 
+      moduleType.includes('krex')
+    );
+    const isPro = !isZyrex && Boolean(isProParam || isProMode || moduleType.startsWith('pro') || moduleType.includes('pro'));
 
-    socket.emit('query:request', {
-      moduleType,
-      queryParam,
-      isPro,
-    });
+    if (socket && isConnected) {
+      socket.emit('query:request', {
+        moduleType,
+        queryParam,
+        isPro,
+        isZyrex,
+        isKrex: isZyrex,
+      });
+    } else {
+      // Fallback HTTP instantâneo caso o websocket esteja em processo de reconexão
+      try {
+        setLoadingStepText('Transmitindo via API HTTP segura...');
+        const res = await fetch('/api/query/request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ moduleType, queryParam, isPro, isZyrex, isKrex: isZyrex }),
+        });
+        const data = await res.json();
+        if (data.ok && data.record) {
+          setCurrentActiveRecord(data.record);
+          setHistory((prev) => [data.record, ...prev]);
+        } else if (data.error) {
+          console.warn('Erro na consulta HTTP:', data.error);
+        }
+      } catch (httpErr) {
+        console.error('Falha no fallback HTTP:', httpErr);
+      } finally {
+        setIsLoading(false);
+      }
+    }
 
     // ==============================================================
     // 2. DESCONTA A CONSULTA NO BANCO DE DADOS EM TEMPO REAL
@@ -478,6 +618,50 @@ export default function App() {
     }
   };
 
+  // Handler para reiniciar robô com /start e imediatamente continuar a busca
+  const handleRestartAndRetry = async (moduleType: string, queryParam: string, isZyrexParam?: boolean) => {
+    setIsLoading(true);
+    setActiveOptionsData(null);
+    setLoadingStepText('Enviando /start para reiniciar o robô no Telegram...');
+
+    const isZyrex = Boolean(
+      isZyrexParam || 
+      moduleType.startsWith('zyrex') || 
+      moduleType.startsWith('krex') || 
+      moduleType.includes('zyrex') || 
+      moduleType.includes('krex')
+    );
+    const isPro = !isZyrex && Boolean(isProMode || moduleType.startsWith('pro') || moduleType.includes('pro'));
+
+    if (socket && isConnected) {
+      socket.emit('query:restart_and_retry', {
+        moduleType,
+        queryParam,
+        isPro,
+        isZyrex,
+        isKrex: isZyrex,
+      });
+    } else {
+      try {
+        setLoadingStepText('Reiniciando robô via API segura (/start)...');
+        const res = await fetch('/api/telegram/restart-and-retry', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ moduleType, queryParam, isPro, isZyrex, isKrex: isZyrex }),
+        });
+        const data = await res.json();
+        if (data.ok && data.record) {
+          setCurrentActiveRecord(data.record);
+          setHistory((prev) => [data.record, ...prev]);
+        }
+      } catch (err) {
+        console.error('Falha ao reiniciar robô com /start:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  };
+
   // Immediate reply shortcut during loading
   const handleImmediateReply = () => {
     if (!socket) return;
@@ -490,6 +674,35 @@ export default function App() {
         responseText: SAMPLE_RESPONSES[targetMod] || `Dossiê gerado com sucesso para a consulta.`,
         operatorName: 'Motor Shazam Buscas',
       });
+    }
+  };
+
+  // Handler para quando o usuário seleciona uma base de dados interativa (CREDILINK, ZYREX, SI-PNI, etc.)
+  const handleSelectOption = async (optionText: string, rowIndex?: number, colIndex?: number) => {
+    if (!activeOptionsData) return;
+    const { requestId } = activeOptionsData;
+    setLoadingStepText(`Base "${optionText}" selecionada! Consultando dados oficiais no Telegram...`);
+    setActiveOptionsData((prev) => prev ? { ...prev, selectedOption: optionText } : null);
+
+    // 1. Emite via Socket.io
+    if (socket && isConnected) {
+      socket.emit('query:select_option', {
+        requestId,
+        optionText,
+        rowIndex,
+        colIndex,
+      });
+    }
+
+    // 2. Dispara fallback HTTP para garantir resposta
+    try {
+      await fetch('/api/query/select-option', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId, optionText, rowIndex, colIndex }),
+      });
+    } catch (e) {
+      console.warn('[select-option] Falha na rota HTTP (o socket tratará o clique):', e);
     }
   };
 
@@ -556,6 +769,11 @@ export default function App() {
         onOpenProfile={() => setIsProfileModalOpen(true)}
         onOpenCode={() => setIsCodeModalOpen(true)}
         onOpenProModal={() => setIsProModalOpen(true)}
+        onOpenKrexModal={() => setIsZyrexModalOpen(true)}
+        onOpenZyrexModal={() => setIsZyrexModalOpen(true)}
+        telegramConfig={telegramConfig}
+        onReconnectTelegram={handleReconnectTelegram}
+        isReconnectingTelegram={isReconnectingTelegram}
       />
 
       {/* Main Content Body */}
@@ -619,32 +837,45 @@ export default function App() {
               onToggleProMode={setIsProMode}
             />
 
-            {/* Realtime Loading / Waiting State */}
+            {/* Realtime Loading / Options Selection / Waiting State */}
             {isLoading && (
-              <div className="p-8 sm:p-12 rounded-[16px] bg-[#003734] border border-[#707777]/20 text-center space-y-4">
-                <div className="relative inline-block">
-                  <div className="w-14 h-14 rounded-full border-2 border-[#011d1c] border-t-[#cbfffc] animate-spin mx-auto"></div>
-                  <Radio className="w-6 h-6 text-[#cbfffc] absolute inset-0 m-auto" />
-                </div>
-                <div>
-                  <h3 className="text-base font-medium text-[#ffffff] tracking-tight font-['DM_Sans',sans-serif]">
-                    {loadingStepText}
-                  </h3>
-                  <p className="text-xs text-[#bbc7c6] uppercase tracking-[0.08em] font-mono mt-1">
-                    WebSocket ➔ Gateway Shazam Buscas ➔ Barramento de Consultas ➔ Retorno Sanitizado
-                  </p>
-                </div>
+              <div className="space-y-4">
+                {activeOptionsData && activeOptionsData.options.length > 0 ? (
+                  <OptionsSelectionCard
+                    requestId={activeOptionsData.requestId}
+                    prompt={activeOptionsData.prompt}
+                    options={activeOptionsData.options}
+                    selectedOption={activeOptionsData.selectedOption}
+                    onSelectOption={handleSelectOption}
+                    autoSelectSeconds={25}
+                  />
+                ) : (
+                  <div className="p-8 sm:p-12 rounded-[16px] bg-[#003734] border border-[#707777]/20 text-center space-y-4">
+                    <div className="relative inline-block">
+                      <div className="w-14 h-14 rounded-full border-2 border-[#011d1c] border-t-[#cbfffc] animate-spin mx-auto"></div>
+                      <Radio className="w-6 h-6 text-[#cbfffc] absolute inset-0 m-auto" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-medium text-[#ffffff] tracking-tight font-['DM_Sans',sans-serif]">
+                        {loadingStepText}
+                      </h3>
+                      <p className="text-xs text-[#bbc7c6] uppercase tracking-[0.08em] font-mono mt-1">
+                        Telegram Gateway ➔ Telegram Bot ➔ Recepção de Opções / Dossiê
+                      </p>
+                    </div>
 
-                <div className="pt-2 flex items-center justify-center gap-3 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={handleImmediateReply}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-[6px] bg-aurora-gradient hover:opacity-90 text-[#012624] text-xs font-medium uppercase tracking-[0.08em] transition-opacity cursor-pointer"
-                  >
-                    <Zap className="w-3.5 h-3.5 text-[#012624]" />
-                    <span>Concluir Imediatamente</span>
-                  </button>
-                </div>
+                    <div className="pt-2 flex items-center justify-center gap-3 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={handleImmediateReply}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-[6px] bg-aurora-gradient hover:opacity-90 text-[#012624] text-xs font-medium uppercase tracking-[0.08em] transition-opacity cursor-pointer"
+                      >
+                        <Zap className="w-3.5 h-3.5 text-[#012624]" />
+                        <span>Concluir Imediatamente</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -718,6 +949,8 @@ export default function App() {
         userProfile={userProfile}
         onOpenPricing={() => setIsPricingModalOpen(true)}
         onLogout={handleGoogleLogout}
+        onOpenSetup={() => setIsSetupModalOpen(true)}
+        isAdmin={Boolean(currentUser?.email && ['wrbatata6@gmail.com'].includes(currentUser.email.toLowerCase()))}
       />
 
       {/* UP DEPIX PIX Checkout Modal */}
@@ -751,6 +984,21 @@ export default function App() {
         loadingStepText={loadingStepText}
         activeRecord={currentActiveRecord}
         onOpenPricing={() => setIsPricingModalOpen(true)}
+      />
+
+      {/* Rota Paralela BUSCAS KREX (KREX) */}
+      <ZyrexSearchModal
+        isOpen={isZyrexModalOpen}
+        onClose={() => setIsZyrexModalOpen(false)}
+        userProfile={userProfile}
+        onSearch={(mod, query) => handleSearch(mod, query, false, true)}
+        onRestartAndRetry={(mod, query) => handleRestartAndRetry(mod, query, true)}
+        isLoading={isLoading}
+        loadingStepText={loadingStepText}
+        activeRecord={currentActiveRecord}
+        onOpenPricing={() => setIsPricingModalOpen(true)}
+        activeOptionsData={activeOptionsData}
+        onSelectOption={handleSelectOption}
       />
     </div>
   );

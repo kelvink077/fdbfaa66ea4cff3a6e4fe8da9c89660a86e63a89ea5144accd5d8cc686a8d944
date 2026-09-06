@@ -20,7 +20,8 @@ export type QueryModuleType =
   | 'pro_titulo'
   | 'pro_mae'
   | 'pro_foto'
-  | 'pro_placa';
+  | 'pro_placa'
+  | (string & {});
 
 export interface QueryModuleInfo {
   id: QueryModuleType;
@@ -34,7 +35,16 @@ export interface QueryModuleInfo {
   defaultSample: string;
 }
 
-export type QueryStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'timeout';
+export type QueryStatus = 'pending' | 'processing' | 'waiting_selection' | 'completed' | 'failed' | 'timeout' | 'error';
+
+export interface QueryOption {
+  text: string;
+  data?: any;
+  rowIndex?: number;
+  colIndex?: number;
+  description?: string;
+  isPrimary?: boolean;
+}
 
 export interface QueryRecord {
   id: string; // e.g. REQ-8942-CPF1
@@ -58,9 +68,17 @@ export interface QueryRecord {
   txtFileName?: string;
   photoUrl?: string;
   photos?: Array<{ url: string; fileName?: string; caption?: string; sizeBytes?: number }>;
+  options?: QueryOption[];
+  selectionPrompt?: string;
+  selectedOption?: string;
   isNotFound?: boolean;
   isPro?: boolean;
+  isKrex?: boolean;
+  isZyrex?: boolean;
   error?: string;
+  hasInternalError?: boolean;
+  errorMessage?: string;
+  needsRestart?: boolean;
 }
 
 export interface ParsedIntelligenceReport {

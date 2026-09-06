@@ -94,20 +94,20 @@ export const QueryForm: React.FC<QueryFormProps> = ({
             }`}
           >
             <Sparkles className="w-3.5 h-3.5" />
-            <span>MODO PRO (@Hgliopk00bot)</span>
+            <span>SkynetbrDATA</span>
             <span className="text-[9px] bg-[#0f172a] text-[#ffd166] px-1 rounded font-mono">VIP</span>
           </button>
         </div>
 
         <div className="text-[11px] font-mono flex items-center gap-2">
-          <span className="text-[#bbc7c6]">Rota Telegram:</span>
+          <span className="text-[#bbc7c6]">Rota:</span>
           <code className={`px-2 py-0.5 rounded font-bold flex items-center gap-1.5 ${
             isProMode 
               ? 'bg-[#ffd166]/15 text-[#ffd166] border border-[#ffd166]/40' 
               : 'bg-[#003734] text-[#cbfffc] border border-[#00827c]/30'
           }`}>
             <Bot className="w-3 h-3" />
-            <span>{isProMode ? '@Hgliopk00bot (7565502829)' : 'Base Padrão'}</span>
+            <span>{isProMode ? 'SkynetbrDATA' : 'Base Padrão'}</span>
           </code>
         </div>
       </div>
@@ -220,7 +220,7 @@ export const QueryForm: React.FC<QueryFormProps> = ({
               {currentPreview ? `${currentPreview.command} ${currentPreview.cleanParam}` : `${getTelegramCommand(moduleInfo.id, '').command} [ALVO]`}
             </code>
             <span className="text-[10px] text-[#707777]">
-              ➔ {isProMode ? '@Hgliopk00bot' : 'Base Padrão'}
+              ➔ {isProMode ? 'SkynetbrDATA' : 'Base Padrão'}
             </span>
           </div>
 

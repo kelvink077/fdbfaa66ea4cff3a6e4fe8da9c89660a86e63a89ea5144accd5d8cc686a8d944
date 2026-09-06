@@ -27,6 +27,8 @@ interface UserProfileModalProps {
   userProfile?: UserProfileData | null;
   onOpenPricing: () => void;
   onLogout: () => void;
+  onOpenSetup?: () => void;
+  isAdmin?: boolean;
 }
 
 export const UserProfileModal: React.FC<UserProfileModalProps> = ({
@@ -36,6 +38,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   userProfile,
   onOpenPricing,
   onLogout,
+  onOpenSetup,
+  isAdmin,
 }) => {
   if (!isOpen || !currentUser) return null;
 
@@ -222,6 +226,23 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             <span>{isTrial ? 'Assinar Plano Premium (Via PIX)' : 'Renovar ou Adicionar Mais Dias (Via PIX)'}</span>
             <ArrowUpRight className="w-4 h-4 text-[#012624]" />
           </button>
+
+          {/* Admin Setup Panel Link */}
+          {isAdmin && onOpenSetup && (
+            <div className="pt-2 border-t border-[#003734]">
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenSetup();
+                }}
+                className="w-full py-2 px-3 rounded-[8px] bg-[#003734]/70 hover:bg-[#003734] border border-[#ffd166]/40 text-[#ffd166] text-xs font-mono flex items-center justify-center gap-2 transition-colors cursor-pointer"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-[#ffd166]" />
+                <span>Painel de Protocolos & Instalação (Admin)</span>
+              </button>
+            </div>
+          )}
 
           <div className="flex items-center gap-3 pt-2">
             <button
