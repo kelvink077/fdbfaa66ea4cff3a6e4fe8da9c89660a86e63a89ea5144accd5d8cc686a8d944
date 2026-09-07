@@ -591,7 +591,7 @@ const MODULE_CONFIG = {
   cpf_2: { title: 'CPF 2 (Consulta Intermediária)', desc: 'Score de crédito, telefones e endereços.', placeholder: '000.000.000-00' },
   cpf_3: { title: 'CPF 3 (Consulta Avançada)', desc: 'Dossiê completo, empresas, processos e bens.', placeholder: '000.000.000-00' },
   cnpj: { title: 'CNPJ (Dados Empresariais & QSA)', desc: 'Quadro societário, faturamento e situação fiscal.', placeholder: '00.000.000/0000-00' },
-  nome: { title: 'NOME (Localização & Homônimos)', desc: 'Pesquisa fonética e localização nacional.', placeholder: 'Digite o nome completo...' },
+  nome: { title: 'NOME (Localização)', desc: 'Pesquisa fonética e localização nacional.', placeholder: 'Digite o nome completo...' },
   email: { title: 'E-MAIL (Vínculos & Breaches)', desc: 'Reputação digital, vazamentos e vínculos.', placeholder: 'nome@empresa.com.br' },
   placa: { title: 'PLACA (Histórico Veicular)', desc: 'Detran, gravame, multas e proprietário.', placeholder: 'ABC1D23 ou ABC-1234' },
   telefone: { title: 'TELEFONE (Operadora & Titular)', desc: 'Operadora, portabilidade e titularidade.', placeholder: '(11) 98765-4321' }

@@ -48,12 +48,12 @@ export const QUERY_MODULES: QueryModuleInfo[] = [
   {
     id: 'nome',
     title: 'NOME',
-    subtitle: 'Localização & Homônimos',
+    subtitle: 'Localização',
     category: 'Pessoa Física',
     placeholder: 'Digite o nome completo da pessoa...',
     iconName: 'Users',
     badge: 'Identificação',
-    description: 'Busca fonética nacional para identificação de CPF, UF de registro, prováveis homônimos e última localização conhecida.',
+    description: 'Busca fonética nacional para identificação de CPF, UF de registro e última localização conhecida.',
     defaultSample: 'CARLOS EDUARDO DE ALMEIDA SILVA',
   },
   {
