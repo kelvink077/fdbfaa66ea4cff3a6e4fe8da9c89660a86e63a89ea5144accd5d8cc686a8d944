@@ -41,7 +41,7 @@ const server = http.createServer(app);
 // =============================================================
 const TELEGRAM_API_ID = process.env.TELEGRAM_API_ID ? parseInt(process.env.TELEGRAM_API_ID, 10) : 9414976;
 const TELEGRAM_API_HASH = process.env.TELEGRAM_API_HASH || 'daccc379b752d2038127b5a9e3699ea9';
-const DEFAULT_STRING_SESSION = '1AQAOMTQ5LjE1NC4xNzUuNTIBuzfZvMVl3lhw49p/bb4txhgGLYPdSFOhncRo+i0hQwN6KQEcP3aQWSZh7bSgmLL046Ph4l7qndkK2i5AlJlOvy75Az+X0d+K0svS8eBRXL9OvsgjesNFYNKFMdLZeFj/b+FSy77Y5Cch5GH5iG2ynxgnRpHbmae7n2vz0OSJKtVsI6Bva/525tavVp+sRwMPBYS0+Y9yGWl0J9BvwPJ9W05IsdtqnRBtcV2RTPSKj4dWVikBduB40JH3V44socsaQuWeGg/9u5O7wvEI/hVVlKJqqCuI7cJHuQ4sJ5oT57sxrmVXYVZFHqunDSDIR+RMONhF3sXV1loBO4Y15TumFWE=';
+const DEFAULT_STRING_SESSION = '1AQAOMTQ5LjE1NC4xNzUuNTIBu5YKHcvxEcuIMtKL0oc/hLO47bwJQKaa09dFqT9SkD4oXt/ZkeNJE0we5kLLmdzbSQ5sh+Q6OdBoEmUAhZKJl1V2/zU85jqwHILczdHDLlSbMHQ5tBn1P9/OPTtwyDwD/NR0ziRLyeb6liTAmG8pbk2T9A/64LFoS32Nv0CrhNqB4/FHgN3d7m9/J/i9RtFOtr6CmGtijre/5Vprgt+cIm/UX56IClX5edGtct5aULSb8fz358flBVGbgY+hsIzftN5/jv4qn4hQ/tWLQHgw5E4jR5Lqd3ayQW/k00Cm1kzBkVLLQdjSh9jnQYFOUWWyEBPfWZdVKu8ui5p5uZjM0Nk=';
 let TELEGRAM_STRING_SESSION = process.env.TELEGRAM_STRING_SESSION || DEFAULT_STRING_SESSION;
 const TELEGRAM_PHONE_NUMBER = process.env.TELEGRAM_PHONE_NUMBER || '5531981219991';
 
@@ -2546,6 +2546,27 @@ app.post('/api/telegram/session', async (req, res) => {
   }
 });
 
+// Status da conexão do Telegram
+app.get('/api/telegram/status', (req, res) => {
+  res.json({
+    status: 'ok',
+    userbotStatus,
+    lastError: lastUserbotError,
+    lastUserbotError,
+    userbotProfile,
+    targetProBot: TELEGRAM_CHAT_ID_PRO,
+    targetKrexBot: TELEGRAM_CHAT_ID_KREX,
+    targetZyrexBot: TELEGRAM_CHAT_ID_KREX,
+    targetOldBot: TELEGRAM_CHAT_ID_OLD,
+    hasToken: Boolean(TELEGRAM_API_ID && TELEGRAM_API_HASH),
+    hasChatId: Boolean(TELEGRAM_CHAT_ID_OLD),
+    sessionConfigured: Boolean(TELEGRAM_STRING_SESSION),
+    totalActiveQueries: activeQueries.size,
+    apiIdConfigured: Boolean(TELEGRAM_API_ID),
+    phoneNumber: TELEGRAM_PHONE_NUMBER,
+  });
+});
+
 // Forçar teste / reconexão da sessão atual
 app.post('/api/telegram/reconnect', async (req, res) => {
   const sessionString = req.body.sessionString ? String(req.body.sessionString).trim() : undefined;
@@ -2564,6 +2585,41 @@ app.post('/api/telegram/reconnect', async (req, res) => {
       ok: false,
       userbotStatus: 'error',
       error: result.error || 'Não foi possível reconectar.',
+    });
+  }
+});
+
+// Disparo de comando de teste direto para os robôs do Telegram
+app.post('/api/telegram/test-dispatch', async (req, res) => {
+  const target = (req.body.target || 'pro').toLowerCase();
+  const command = (req.body.command || '/start').trim();
+
+  if (!userbotClient || userbotStatus !== 'connected') {
+    return res.status(400).json({
+      ok: false,
+      userbotStatus,
+      error: `Userbot Telegram offline ou com erro (${lastUserbotError || 'desconectado'}). Reconecte ou informe uma String Session válida antes de testar.`,
+    });
+  }
+
+  try {
+    const targetChatId = target === 'krex' ? TELEGRAM_CHAT_ID_KREX : TELEGRAM_CHAT_ID_PRO;
+    console.log(`[GramJS Teste] Enviando comando "${command}" para ${targetChatId}...`);
+    const peer = await resolveTelegramPeer(userbotClient, targetChatId);
+    const sentMsg: any = await userbotClient.sendMessage(peer, { message: command });
+    return res.json({
+      ok: true,
+      targetChatId,
+      messageId: sentMsg.id,
+      command,
+      timestamp: Date.now(),
+      message: `Comando "${command}" despachado com sucesso para ${targetChatId}! (ID da mensagem: ${sentMsg.id})`,
+    });
+  } catch (err: any) {
+    console.error('[GramJS Teste] Falha ao enviar comando de teste:', err?.message || err);
+    return res.status(500).json({
+      ok: false,
+      error: err?.message || 'Falha ao enviar mensagem de teste pelo Telegram.',
     });
   }
 });

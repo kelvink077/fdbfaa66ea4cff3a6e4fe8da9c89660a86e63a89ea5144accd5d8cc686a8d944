@@ -63,31 +63,31 @@ export const QueryForm: React.FC<QueryFormProps> = ({
   const currentPreview = inputValue ? getTelegramCommand(moduleInfo.id, inputValue) : null;
 
   return (
-    <div className={`p-8 rounded-[16px] bg-[#003734] border transition-all space-y-6 ${
+    <div className={`p-4 sm:p-6 lg:p-8 rounded-[16px] bg-[#003734] border transition-all space-y-4 sm:space-y-6 ${
       isProMode 
         ? 'border-[#ffd166]/50 shadow-xl shadow-[#ffd166]/10 ring-1 ring-[#ffd166]/30' 
         : 'border-[#707777]/20'
     }`}>
       {/* Roteamento Engine Toggle */}
-      <div className="flex flex-wrap items-center justify-between gap-3 p-2.5 rounded-[10px] bg-[#011d1c] border border-[#003734]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-2 sm:p-2.5 rounded-[10px] bg-[#011d1c] border border-[#003734]">
         <div className="flex items-center gap-1.5 flex-wrap">
           <button
             type="button"
             onClick={() => onToggleProMode?.(false)}
-            className={`px-3 py-1.5 rounded-[6px] text-xs font-mono font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`px-2.5 sm:px-3 py-1.5 rounded-[6px] text-xs font-mono font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
               !isProMode
                 ? 'bg-[#003734] text-[#cbfffc] border border-[#00827c]/40 shadow-sm'
                 : 'text-[#707777] hover:text-[#bbc7c6]'
             }`}
           >
             <span className={`w-2 h-2 rounded-full ${!isProMode ? 'bg-[#cbfffc]' : 'bg-[#707777]'}`} />
-            <span>Base Padrão (Telegram)</span>
+            <span>Telegram Bot</span>
           </button>
 
           <button
             type="button"
             onClick={() => onToggleProMode?.(true)}
-            className={`px-3.5 py-1.5 rounded-[6px] text-xs font-mono font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`px-2.5 sm:px-3.5 py-1.5 rounded-[6px] text-xs font-mono font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
               isProMode
                 ? 'bg-gradient-to-r from-[#ffd166] to-[#f59e0b] text-[#0f172a] shadow-md shadow-[#ffd166]/25 border border-[#fef08a]'
                 : 'text-[#ffd166]/80 hover:text-[#ffd166] hover:bg-[#003734]/50'
@@ -99,8 +99,8 @@ export const QueryForm: React.FC<QueryFormProps> = ({
           </button>
         </div>
 
-        <div className="text-[11px] font-mono flex items-center gap-2">
-          <span className="text-[#bbc7c6]">Rota:</span>
+        <div className="text-[11px] font-mono flex items-center gap-1.5 text-[#bbc7c6]">
+          <span>Rota:</span>
           <code className={`px-2 py-0.5 rounded font-bold flex items-center gap-1.5 ${
             isProMode 
               ? 'bg-[#ffd166]/15 text-[#ffd166] border border-[#ffd166]/40' 
@@ -113,31 +113,31 @@ export const QueryForm: React.FC<QueryFormProps> = ({
       </div>
 
       {/* Eyebrow & Module Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] uppercase tracking-[0.15em] text-[#edfffe] font-medium font-['DM_Sans',sans-serif]">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] sm:text-[11px] uppercase tracking-[0.15em] text-[#edfffe] font-medium font-['DM_Sans',sans-serif]">
               TERMINAL INGESTION
             </span>
             <span className="text-[10px] text-[#bbc7c6] uppercase tracking-[0.1em]">
               / REALTIME DISPATCH
             </span>
             {isProMode && (
-              <span className="text-[10px] bg-[#ffd166]/20 text-[#ffd166] border border-[#ffd166]/40 px-2 py-0.5 rounded font-mono font-bold">
+              <span className="text-[9px] sm:text-[10px] bg-[#ffd166]/20 text-[#ffd166] border border-[#ffd166]/40 px-2 py-0.5 rounded font-mono font-bold">
                 👑 MODO PRO ATIVO
               </span>
             )}
           </div>
-          <div className="flex items-baseline gap-2.5 flex-wrap">
-            <h2 className="text-2xl sm:text-3xl font-medium text-[#ffffff] tracking-[-0.03em] font-['DM_Sans',sans-serif]">
+          <div className="flex items-baseline gap-2 sm:gap-2.5 flex-wrap">
+            <h2 className="text-xl sm:text-3xl font-medium text-[#ffffff] tracking-[-0.03em] font-['DM_Sans',sans-serif]">
               {moduleInfo.title}
             </h2>
             {moduleInfo.subtitle && (
-              <span className="text-base sm:text-lg text-[#cbfffc] font-normal font-mono">
+              <span className="text-sm sm:text-lg text-[#cbfffc] font-normal font-mono">
                 {moduleInfo.subtitle}
               </span>
             )}
-            <span className="text-xs px-2 py-0.5 rounded-[4px] bg-[#011d1c] border border-[#00827c]/40 text-[#ffd166] font-mono">
+            <span className="text-[11px] sm:text-xs px-2 py-0.5 rounded-[4px] bg-[#011d1c] border border-[#00827c]/40 text-[#ffd166] font-mono">
               {moduleInfo.badge}
             </span>
           </div>
@@ -148,7 +148,7 @@ export const QueryForm: React.FC<QueryFormProps> = ({
           type="button"
           onClick={handleLoadSample}
           disabled={isLoading}
-          className="self-start sm:self-auto flex items-center gap-2 px-3.5 py-2 rounded-[6px] bg-[#011d1c] hover:bg-[#012624] text-[#edfffe] text-[12px] uppercase tracking-[0.08em] font-medium transition-colors cursor-pointer border border-[#003734]"
+          className="self-start sm:self-auto flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-[6px] bg-[#011d1c] hover:bg-[#012624] text-[#edfffe] text-[11px] sm:text-[12px] uppercase tracking-[0.08em] font-medium transition-colors cursor-pointer border border-[#003734]"
         >
           <span>Exemplo Válido</span>
           <ArrowUpRight className="w-3.5 h-3.5 text-[#cbfffc]" />
@@ -156,7 +156,7 @@ export const QueryForm: React.FC<QueryFormProps> = ({
       </div>
 
       {/* Query Search Input Form */}
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
         <div className="relative">
           <input
             id="query-input"
@@ -165,7 +165,7 @@ export const QueryForm: React.FC<QueryFormProps> = ({
             onChange={handleInputChange}
             placeholder={moduleInfo.placeholder.toUpperCase()}
             disabled={isLoading}
-            className={`w-full bg-[#011d1c] border rounded-[6px] p-4 sm:p-5 pr-36 sm:pr-48 text-base sm:text-xl font-mono tracking-wider transition-colors outline-none text-[#ffffff] placeholder:text-[#707777] ${
+            className={`w-full bg-[#011d1c] border rounded-[8px] p-3.5 sm:p-5 pr-28 sm:pr-48 text-sm sm:text-xl font-mono tracking-wider transition-colors outline-none text-[#ffffff] placeholder:text-[#707777] ${
               errorMessage
                 ? 'border-[#fde9ff] focus:border-[#fde9ff]'
                 : isProMode
@@ -181,7 +181,7 @@ export const QueryForm: React.FC<QueryFormProps> = ({
             type="submit"
             id="btn-submit-search"
             disabled={isLoading || !inputValue}
-            className={`absolute right-2 sm:right-2.5 top-2 sm:top-2.5 bottom-2 sm:bottom-2.5 px-5 sm:px-8 rounded-[6px] flex items-center justify-center gap-2 transition-all text-xs sm:text-sm font-medium uppercase tracking-[0.08em] cursor-pointer ${
+            className={`absolute right-1.5 sm:right-2.5 top-1.5 sm:top-2.5 bottom-1.5 sm:bottom-2.5 px-3.5 sm:px-8 rounded-[6px] flex items-center justify-center gap-1.5 sm:gap-2 transition-all text-xs sm:text-sm font-medium uppercase tracking-[0.08em] cursor-pointer ${
               isLoading || !inputValue
                 ? 'bg-[#003734] text-[#707777] cursor-not-allowed border border-[#707777]/20'
                 : isProMode
@@ -191,13 +191,15 @@ export const QueryForm: React.FC<QueryFormProps> = ({
           >
             {isLoading ? (
               <>
-                <Loader2 className="w-4 h-4 animate-spin text-[#012624]" />
+                <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin text-[#012624]" />
                 <span className="hidden sm:inline">PROCESSANDO</span>
+                <span className="sm:hidden text-[11px]">BUSCANDO</span>
               </>
             ) : (
               <>
-                <span>{isProMode ? 'CONSULTAR PRO' : 'CONSULTAR'}</span>
-                <Search className="w-4 h-4 text-[#012624]" />
+                <span className="hidden sm:inline">{isProMode ? 'CONSULTAR PRO' : 'CONSULTAR'}</span>
+                <span className="sm:hidden text-[11px] font-bold">{isProMode ? 'PRO' : 'BUSCAR'}</span>
+                <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#012624]" />
               </>
             )}
           </button>
@@ -205,28 +207,28 @@ export const QueryForm: React.FC<QueryFormProps> = ({
 
         {/* Validation Error Message */}
         {errorMessage && (
-          <div className="flex items-center gap-2 text-xs text-[#fde9ff] bg-[#011d1c] border border-[#707777]/40 px-4 py-3 rounded-[6px] font-mono">
+          <div className="flex items-center gap-2 text-xs text-[#fde9ff] bg-[#011d1c] border border-[#707777]/40 px-3 py-2.5 sm:px-4 sm:py-3 rounded-[6px] font-mono">
             <AlertCircle className="w-4 h-4 text-[#fde9ff] flex-shrink-0" />
             <span>{errorMessage}</span>
           </div>
         )}
 
         {/* Command Syntax Preview & Latency Meta */}
-        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-[#bbc7c6] font-mono pt-1">
-          <div className="flex items-center gap-2.5">
-            <Terminal className="w-3.5 h-3.5 text-[#cbfffc]" />
-            <span className="uppercase text-[11px] tracking-[0.08em]">Comando Enviado:</span>
-            <code className="text-[#edfffe] font-medium bg-[#011d1c] px-2.5 py-1 rounded-[6px] border border-[#003734]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-[#bbc7c6] font-mono pt-1">
+          <div className="flex items-center gap-2 flex-wrap min-w-0">
+            <Terminal className="w-3.5 h-3.5 text-[#cbfffc] shrink-0" />
+            <span className="uppercase text-[10px] sm:text-[11px] tracking-[0.08em] shrink-0">Comando:</span>
+            <code className="text-[#edfffe] font-medium bg-[#011d1c] px-2 py-0.5 rounded-[4px] border border-[#003734] truncate max-w-[200px] sm:max-w-none text-[11px]">
               {currentPreview ? `${currentPreview.command} ${currentPreview.cleanParam}` : `${getTelegramCommand(moduleInfo.id, '').command} [ALVO]`}
             </code>
-            <span className="text-[10px] text-[#707777]">
+            <span className="text-[10px] text-[#707777] shrink-0">
               ➔ {isProMode ? 'SkynetbrDATA' : 'Base Padrão'}
             </span>
           </div>
 
-          <div className="flex items-center gap-2 text-[#bbc7c6] text-[11px] uppercase tracking-[0.08em]">
-            <Clock className="w-3.5 h-3.5 text-[#707777]" />
-            <span>Latência Est.:</span>
+          <div className="flex items-center gap-1.5 text-[#bbc7c6] text-[10px] sm:text-[11px] uppercase tracking-[0.08em]">
+            <Clock className="w-3.5 h-3.5 text-[#707777] shrink-0" />
+            <span>Latência:</span>
             <span className="text-[#edfffe] font-medium">~1.5s</span>
           </div>
         </div>

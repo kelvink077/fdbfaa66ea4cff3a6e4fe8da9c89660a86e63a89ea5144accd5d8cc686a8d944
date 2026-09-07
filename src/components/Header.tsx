@@ -9,7 +9,9 @@ import {
   ShieldCheck,
   Zap,
   FileCode,
-  Sparkles
+  Sparkles,
+  Menu,
+  X
 } from 'lucide-react';
 import type { User as FirebaseUser } from 'firebase/auth';
 import type { UserProfileData } from '../lib/firebase';
@@ -36,6 +38,8 @@ interface HeaderProps {
   telegramConfig?: TelegramConfigState;
   onReconnectTelegram?: () => void;
   isReconnectingTelegram?: boolean;
+  onToggleMobileMenu?: () => void;
+  isMobileMenuOpen?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -57,26 +61,48 @@ export const Header: React.FC<HeaderProps> = ({
   telegramConfig,
   onReconnectTelegram,
   isReconnectingTelegram,
+  onToggleMobileMenu,
+  isMobileMenuOpen = false,
 }) => {
   const validity = calculateAccountValidity(userProfile);
 
   return (
-    <header className="h-20 border-b border-[#003734] flex items-center justify-between px-6 lg:px-12 bg-[#012624] sticky top-0 z-30">
+    <header className="h-16 sm:h-20 border-b border-[#003734] flex items-center justify-between px-3 sm:px-6 lg:px-12 bg-[#012624] sticky top-0 z-30 w-full max-w-full overflow-hidden">
       {/* Left: Brand / Shazam Buscas Mark with Dynamic Animated Logo */}
-      <div className="flex items-center gap-6">
-        <div className="flex items-center gap-3">
-          {/* Dynamic Animated Shazam Logo */}
-          <ShazamLogo size="sm" isPulseSpeedFast={isConnected} />
+      <div className="flex items-center gap-2 sm:gap-4 lg:gap-6 min-w-0">
+        {/* Mobile Menu Hamburger button */}
+        {onToggleMobileMenu && (
+          <button
+            id="btn-mobile-menu"
+            type="button"
+            onClick={onToggleMobileMenu}
+            className="lg:hidden p-1.5 sm:p-2 -ml-1 text-[#cbfffc] hover:text-[#ffffff] hover:bg-[#003734] active:bg-[#003734] rounded-[8px] transition-colors flex items-center justify-center shrink-0 cursor-pointer"
+            title="Menu de módulos"
+            aria-label="Menu de módulos"
+          >
+            {isMobileMenuOpen ? (
+              <X className="w-5 h-5 text-[#cbfffc]" />
+            ) : (
+              <Menu className="w-5 h-5 text-[#cbfffc]" />
+            )}
+          </button>
+        )}
 
-          <div>
-            <div className="flex items-center gap-2.5">
-              <h1 className="font-semibold text-lg tracking-tight text-[#ffffff] uppercase font-['DM_Sans',sans-serif]">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          {/* Dynamic Animated Shazam Logo */}
+          <div className="shrink-0">
+            <ShazamLogo size="sm" isPulseSpeedFast={isConnected} />
+          </div>
+
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2.5 flex-wrap">
+              <h1 className="font-semibold text-base sm:text-lg tracking-tight text-[#ffffff] uppercase font-['DM_Sans',sans-serif] truncate">
                 SHAZAM <span className="bg-gradient-to-r from-[#cbfffc] to-[#79fbf5] bg-clip-text text-transparent font-bold">BUSCAS</span>
               </h1>
-              <span className="text-[10px] uppercase tracking-[0.15em] px-2 py-0.5 rounded-[4px] bg-[#003734] text-[#cbfffc] border border-[#00827c]/40 font-mono font-medium hidden sm:inline-block">
+              <span className="text-[9px] sm:text-[10px] uppercase tracking-[0.15em] px-1.5 sm:px-2 py-0.5 rounded-[4px] bg-[#003734] text-[#cbfffc] border border-[#00827c]/40 font-mono font-medium hidden sm:inline-block shrink-0">
                 INTELIGÊNCIA
               </span>
-              <span className="text-[10px] uppercase tracking-[0.12em] px-2 py-0.5 rounded-[4px] bg-[#011d1c] text-[#edfffe] border border-[#003734] font-medium hidden md:inline-block font-mono">
+              <span className="text-[9px] sm:text-[10px] uppercase tracking-[0.12em] px-1.5 sm:px-2 py-0.5 rounded-[4px] bg-[#011d1c] text-[#edfffe] border border-[#003734] font-medium hidden md:inline-block font-mono shrink-0">
                 B2B EM TEMPO REAL
               </span>
             </div>
@@ -99,17 +125,17 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Right: Telemetry, Pricing & User Actions */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-1.5 sm:gap-2.5 lg:gap-3 shrink-0">
         {/* Pricing button */}
         {onOpenPricing && (
           <button
             id="btn-header-pricing"
             onClick={onOpenPricing}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#003734] hover:bg-[#004743] border border-[#ffd166]/40 text-[#ffd166] rounded-[6px] text-xs font-mono transition-all cursor-pointer shadow-sm hover:scale-[1.02]"
-            title="Ver Planos de Assinatura (Semanal R$11, 15 Dias R$19,90, Mensal R$35)"
+            className="flex items-center gap-1 sm:gap-1.5 p-1.5 sm:px-3 sm:py-1.5 bg-[#003734] hover:bg-[#004743] border border-[#ffd166]/40 text-[#ffd166] rounded-[6px] text-xs font-mono transition-all cursor-pointer shadow-sm hover:scale-[1.02] shrink-0"
+            title="Ver Planos de Assinatura"
           >
-            <Crown className="w-3.5 h-3.5 text-[#ffd166]" />
-            <span className="hidden sm:inline">Planos & Preços</span>
+            <Crown className="w-3.5 h-3.5 text-[#ffd166] shrink-0" />
+            <span className="hidden md:inline">Planos</span>
           </button>
         )}
 
@@ -118,24 +144,28 @@ export const Header: React.FC<HeaderProps> = ({
           <div 
             id="google-user-profile-pill"
             onClick={onOpenProfile}
-            className="flex items-center gap-2.5 px-3 py-1.5 bg-[#003734] hover:bg-[#004743] border border-[#00827c]/40 hover:border-[#cbfffc] rounded-[6px] text-xs text-[#edfffe] cursor-pointer transition-all shadow-sm group"
+            className="flex items-center gap-1.5 sm:gap-2 p-1 sm:px-3 sm:py-1.5 bg-[#003734] hover:bg-[#004743] border border-[#00827c]/40 hover:border-[#cbfffc] rounded-[6px] text-xs text-[#edfffe] cursor-pointer transition-all shrink-0 group"
             title="Clique para ver Validade da Conta e Detalhes do Perfil"
           >
-            {currentUser.photoURL ? (
-              <img 
-                src={currentUser.photoURL} 
-                alt={currentUser.displayName || 'Operador'} 
-                className="w-7 h-7 rounded-full border border-[#cbfffc] object-cover group-hover:scale-105 transition-transform"
-                referrerPolicy="no-referrer"
-              />
-            ) : (
-              <div className="w-7 h-7 rounded-full bg-[#012624] flex items-center justify-center text-[#cbfffc] group-hover:scale-105 transition-transform">
-                <UserIcon className="w-4 h-4" />
-              </div>
-            )}
-            <div className="flex flex-col text-left">
+            <div className="relative shrink-0">
+              {currentUser.photoURL ? (
+                <img 
+                  src={currentUser.photoURL} 
+                  alt={currentUser.displayName || 'Operador'} 
+                  className="w-7 h-7 rounded-full border border-[#cbfffc] object-cover group-hover:scale-105 transition-transform"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="w-7 h-7 rounded-full bg-[#012624] border border-[#00827c] flex items-center justify-center text-[#cbfffc] group-hover:scale-105 transition-transform">
+                  <UserIcon className="w-3.5 h-3.5" />
+                </div>
+              )}
+              <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#cbfffc] border border-[#012624] animate-pulse"></span>
+            </div>
+
+            <div className="hidden sm:flex flex-col text-left">
               <div className="flex items-center gap-1.5">
-                <span className="text-[11px] font-medium text-[#ffffff] leading-tight max-w-[120px] truncate group-hover:text-[#cbfffc] transition-colors">
+                <span className="text-[11px] font-medium text-[#ffffff] leading-tight max-w-[90px] md:max-w-[120px] truncate group-hover:text-[#cbfffc] transition-colors">
                   {currentUser.displayName || currentUser.email?.split('@')[0] || 'Operador'}
                 </span>
                 <span className="px-1.5 py-0.2 rounded-[4px] bg-[#ffd166]/20 border border-[#ffd166]/40 text-[#ffd166] text-[9px] font-mono font-medium tracking-tight flex items-center gap-0.5">
@@ -148,7 +178,7 @@ export const Header: React.FC<HeaderProps> = ({
                   <span className="w-1.5 h-1.5 rounded-full bg-[#cbfffc] animate-pulse"></span>
                   {validity.daysRemaining}d restantes
                 </span>
-                <span className="text-[#707777] hidden sm:inline">• Perfil</span>
+                <span className="text-[#707777] hidden md:inline">• Perfil</span>
               </div>
             </div>
             <button
@@ -157,7 +187,7 @@ export const Header: React.FC<HeaderProps> = ({
                 e.stopPropagation();
                 onLogoutGoogle();
               }}
-              className="ml-1.5 p-1.5 text-[#bbc7c6] hover:text-[#fde9ff] hover:bg-[#012624]/80 rounded transition-colors cursor-pointer"
+              className="hidden sm:block ml-1 p-1 text-[#bbc7c6] hover:text-[#fde9ff] hover:bg-[#012624]/80 rounded transition-colors cursor-pointer"
               title="Encerrar sessão"
             >
               <LogOut className="w-3.5 h-3.5" />
@@ -168,13 +198,13 @@ export const Header: React.FC<HeaderProps> = ({
             id="btn-login-google"
             onClick={onLoginGoogle}
             disabled={isAuthLoading}
-            className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-[#00827c] to-[#00a8a0] hover:opacity-95 text-[#011d1c] rounded-[6px] text-xs font-semibold font-mono uppercase tracking-[0.05em] transition-all cursor-pointer shadow-sm hover:scale-[1.02]"
+            className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 bg-gradient-to-r from-[#00827c] to-[#00a8a0] hover:opacity-95 text-[#011d1c] rounded-[6px] text-xs font-semibold font-mono uppercase tracking-[0.05em] transition-all cursor-pointer shadow-sm hover:scale-[1.02] shrink-0"
             title="Entrar com conta Google"
           >
             {isAuthLoading ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin text-[#011d1c]" />
             ) : (
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24">
                 <path
                   fill="#011d1c"
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -193,7 +223,8 @@ export const Header: React.FC<HeaderProps> = ({
                 />
               </svg>
             )}
-            <span>Entrar com Google</span>
+            <span className="hidden sm:inline">Entrar com Google</span>
+            <span className="sm:hidden text-[11px]">Entrar</span>
           </button>
         )}
 
@@ -201,12 +232,14 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           id="btn-buscas-pro"
           onClick={onOpenProModal}
-          className="relative group overflow-hidden flex items-center gap-2 px-3.5 py-2 rounded-[8px] bg-gradient-to-r from-[#ffd166] via-[#f59e0b] to-[#d97706] hover:from-[#ffe082] hover:to-[#f59e0b] text-[#0f172a] font-bold text-xs uppercase tracking-wider shadow-lg shadow-[#ffd166]/20 border border-[#fef08a] transition-all cursor-pointer animate-pulse hover:scale-105"
+          className="relative group overflow-hidden flex items-center gap-1 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-[8px] bg-gradient-to-r from-[#ffd166] via-[#f59e0b] to-[#d97706] hover:from-[#ffe082] hover:to-[#f59e0b] text-[#0f172a] font-bold text-xs uppercase tracking-wider shadow-md shadow-[#ffd166]/20 border border-[#fef08a] transition-all cursor-pointer hover:scale-105 shrink-0"
           title="Acessar painel exclusivo BUSCAS PRO"
         >
-          <Sparkles className="w-3.5 h-3.5 text-[#0f172a] fill-[#0f172a]" />
-          <span className="font-extrabold tracking-wider font-mono">BUSCAS PRO</span>
-          <span className="text-[9px] bg-[#0f172a] text-[#ffd166] px-1.5 py-0.5 rounded font-mono font-bold tracking-tight">
+          <Sparkles className="w-3.5 h-3.5 text-[#0f172a] fill-[#0f172a] shrink-0" />
+          <span className="font-extrabold tracking-wider font-mono text-[11px] sm:text-xs">
+            <span className="hidden sm:inline">BUSCAS </span>PRO
+          </span>
+          <span className="hidden sm:inline-block text-[9px] bg-[#0f172a] text-[#ffd166] px-1.5 py-0.5 rounded font-mono font-bold tracking-tight">
             VIP
           </span>
         </button>
@@ -215,19 +248,21 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           id="btn-buscas-krex"
           onClick={onOpenKrexModal || onOpenZyrexModal}
-          className="relative group overflow-hidden flex items-center gap-2 px-3.5 py-2 rounded-[8px] bg-gradient-to-r from-[#00d2ff] via-[#00a8cc] to-[#00827c] hover:from-[#79fbf5] hover:to-[#00d2ff] text-[#011d1c] font-bold text-xs uppercase tracking-wider shadow-lg shadow-[#00d2ff]/20 border border-[#79fbf5] transition-all cursor-pointer animate-pulse hover:scale-105"
+          className="relative group overflow-hidden flex items-center gap-1 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-[8px] bg-gradient-to-r from-[#00d2ff] via-[#00a8cc] to-[#00827c] hover:from-[#79fbf5] hover:to-[#00d2ff] text-[#011d1c] font-bold text-xs uppercase tracking-wider shadow-md shadow-[#00d2ff]/20 border border-[#79fbf5] transition-all cursor-pointer hover:scale-105 shrink-0"
           title="Acessar painel exclusivo BUSCAS KREX (KREX)"
         >
-          <Zap className="w-3.5 h-3.5 text-[#011d1c] fill-[#011d1c]" />
-          <span className="font-extrabold tracking-wider font-mono">BUSCAS KREX</span>
-          <span className="text-[9px] bg-[#011d1c] text-[#79fbf5] px-1.5 py-0.5 rounded font-mono font-bold tracking-tight">
+          <Zap className="w-3.5 h-3.5 text-[#011d1c] fill-[#011d1c] shrink-0" />
+          <span className="font-extrabold tracking-wider font-mono text-[11px] sm:text-xs">
+            <span className="hidden sm:inline">BUSCAS </span>KREX
+          </span>
+          <span className="hidden sm:inline-block text-[9px] bg-[#011d1c] text-[#79fbf5] px-1.5 py-0.5 rounded font-mono font-bold tracking-tight">
             BOT
           </span>
         </button>
 
         {/* Active Queue indicator */}
         {activeRequestsCount > 0 && (
-          <div className="flex items-center gap-1.5 px-2.5 py-2 bg-[#003734] text-[#fde9ff] rounded-[6px] text-[11px] uppercase tracking-[0.12em] font-medium font-mono">
+          <div className="hidden md:flex items-center gap-1.5 px-2.5 py-2 bg-[#003734] text-[#fde9ff] rounded-[6px] text-[11px] uppercase tracking-[0.12em] font-medium font-mono shrink-0">
             <Activity className="w-3 h-3 text-[#fde9ff]" />
             <span>{activeRequestsCount} QUEUED</span>
           </div>

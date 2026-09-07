@@ -24,6 +24,8 @@ import {
   QueryOption
 } from './types';
 import { OptionsSelectionCard } from './components/OptionsSelectionCard';
+import { MobileModuleBar } from './components/MobileModuleBar';
+import { MobileDrawer } from './components/MobileDrawer';
 import { QUERY_MODULES } from './utils/modulesData';
 import { parseIntelligenceResponse, SAMPLE_RESPONSES, getSampleResponseForQuery } from './utils/intelligenceTemplates';
 import type { User as FirebaseUser } from 'firebase/auth';
@@ -82,6 +84,7 @@ export default function App() {
   const [isPixModalOpen, setIsPixModalOpen] = useState(false);
   const [isProModalOpen, setIsProModalOpen] = useState(false);
   const [isZyrexModalOpen, setIsZyrexModalOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProMode, setIsProMode] = useState(false);
   const [selectedPlanForPix, setSelectedPlanForPix] = useState<'weekly' | 'biweekly' | 'monthly'>('monthly');
 
@@ -126,9 +129,20 @@ export default function App() {
           botUsername: data.profile?.username || data.profile?.firstName,
           lastError: null,
         }));
+      } else {
+        setTelegramConfig((prev) => ({
+          ...prev,
+          userbotStatus: data.userbotStatus || 'error',
+          lastError: data.error || 'Falha ao reconectar ao Telegram.',
+        }));
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('Erro ao reconectar Telegram:', e);
+      setTelegramConfig((prev) => ({
+        ...prev,
+        userbotStatus: 'error',
+        lastError: e?.message || 'Falha de conexão com a API do servidor.',
+      }));
     } finally {
       setIsReconnectingTelegram(false);
     }
@@ -774,10 +788,22 @@ export default function App() {
         telegramConfig={telegramConfig}
         onReconnectTelegram={handleReconnectTelegram}
         isReconnectingTelegram={isReconnectingTelegram}
+        onToggleMobileMenu={() => setIsMobileMenuOpen((prev) => !prev)}
+        isMobileMenuOpen={isMobileMenuOpen}
+      />
+
+      {/* Mobile Horizontal Module Switcher */}
+      <MobileModuleBar
+        selectedModule={selectedModule}
+        onSelectModule={(mod) => {
+          setSelectedModule(mod);
+        }}
+        pendingCountByModule={pendingCountByModule}
+        onOpenAllModules={() => setIsMobileMenuOpen(true)}
       />
 
       {/* Main Content Body */}
-      <div className="flex-1 flex flex-col lg:flex-row w-full mx-auto">
+      <div className="flex-1 flex flex-col lg:flex-row w-full max-w-full overflow-x-hidden mx-auto">
         {/* Left Sidebar with 8 Modules */}
         <Sidebar
           selectedModule={selectedModule}
@@ -788,13 +814,13 @@ export default function App() {
         />
 
         {/* Central Workspace: Abyssal Liquid Canvas (#012624) */}
-        <main className="flex-1 p-6 sm:p-8 lg:p-12 space-y-8 overflow-y-auto bg-[#012624] min-h-[calc(100vh-5rem)]">
-          <div className="max-w-5xl mx-auto space-y-8">
+        <main className="flex-1 p-3.5 sm:p-6 lg:p-12 space-y-6 sm:space-y-8 overflow-y-auto bg-[#012624] min-h-[calc(100vh-5rem)] w-full max-w-full overflow-x-hidden">
+          <div className="max-w-5xl mx-auto space-y-6 sm:space-y-8">
 
             {/* Hero Ambient Banner with 3D Bioluminescent Data Orb */}
-            <div className="p-6 sm:p-8 rounded-[16px] bg-[#003734] border border-[#707777]/20 flex flex-col md:flex-row items-center justify-between gap-6 overflow-hidden relative">
-              <div className="space-y-2.5 max-w-xl z-10">
-                <div className="flex items-center gap-2">
+            <div className="p-4 sm:p-6 lg:p-8 rounded-[16px] bg-[#003734] border border-[#707777]/20 flex flex-col md:flex-row items-center justify-between gap-4 sm:gap-6 overflow-hidden relative">
+              <div className="space-y-2 max-w-xl z-10 text-center md:text-left">
+                <div className="flex items-center justify-center md:justify-start gap-2">
                   <span className="text-[10px] uppercase tracking-[0.15em] text-[#cbfffc] font-medium font-mono">
                     SHAZAM BUSCAS PROTOCOL
                   </span>
@@ -802,17 +828,17 @@ export default function App() {
                     / LIQUID ENGINE
                   </span>
                 </div>
-                <h2 className="text-2xl sm:text-3xl font-medium tracking-[-0.04em] text-[#ffffff] leading-tight font-['DM_Sans',sans-serif]">
+                <h2 className="text-xl sm:text-2xl lg:text-3xl font-medium tracking-[-0.04em] text-[#ffffff] leading-tight font-['DM_Sans',sans-serif]">
                   Inteligência Investigativa em Tempo Real
                 </h2>
-                <p className="text-[14px] text-[#bbc7c6] leading-relaxed">
+                <p className="text-[13px] sm:text-[14px] text-[#bbc7c6] leading-relaxed">
                   Inteligência cadastral e veicular de alta performance. Captura de dossiês completos com sanitização instantânea de dados brutos.
                 </p>
               </div>
 
               {/* Defining Brand Visual: Bioluminescent Particle Sphere Orb */}
-              <div className="relative flex items-center justify-center shrink-0 w-36 h-36 md:w-44 md:h-44">
-                <ParticleSphereVisual size={170} dotCount={380} />
+              <div className="relative flex items-center justify-center shrink-0 w-28 h-28 sm:w-36 sm:h-36 md:w-44 md:h-44">
+                <ParticleSphereVisual size={150} dotCount={340} />
               </div>
             </div>
 
@@ -999,6 +1025,17 @@ export default function App() {
         onOpenPricing={() => setIsPricingModalOpen(true)}
         activeOptionsData={activeOptionsData}
         onSelectOption={handleSelectOption}
+      />
+
+      {/* Mobile Slide-over Navigation Drawer */}
+      <MobileDrawer
+        isOpen={isMobileMenuOpen}
+        onClose={() => setIsMobileMenuOpen(false)}
+        selectedModule={selectedModule}
+        onSelectModule={(mod) => setSelectedModule(mod)}
+        pendingCountByModule={pendingCountByModule}
+        onOpenProModal={() => setIsProModalOpen(true)}
+        onOpenKrexModal={() => setIsZyrexModalOpen(true)}
       />
     </div>
   );

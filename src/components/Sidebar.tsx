@@ -12,12 +12,14 @@ interface SidebarProps {
   selectedModule: QueryModuleType;
   onSelectModule: (module: QueryModuleType) => void;
   pendingCountByModule?: Record<string, number>;
+  className?: string;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   selectedModule,
   onSelectModule,
   pendingCountByModule = {},
+  className = '',
 }) => {
   const cpfModules = QUERY_MODULES.filter((m) => m.id.startsWith('cpf'));
   const otherModules = QUERY_MODULES.filter((m) => !m.id.startsWith('cpf'));
@@ -37,7 +39,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   return (
-    <aside className="w-full lg:w-80 bg-[#011d1c] border-r border-[#003734] flex flex-col flex-shrink-0 justify-between">
+    <aside className={`w-full lg:w-80 bg-[#011d1c] border-r border-[#003734] hidden lg:flex flex-col flex-shrink-0 justify-between ${className}`}>
       <div className="py-6 px-5 overflow-y-auto space-y-7">
         
         {/* Plan / Protocol Surface Card (Liquid Kelp #003734, 16px radius, no shadows) */}
