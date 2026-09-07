@@ -31,7 +31,7 @@ import {
 } from 'lucide-react';
 import { PRO_MODULES, ProModuleInfo } from '../utils/proModulesData';
 import { QueryModuleType, QueryRecord } from '../types';
-import { UserProfileData } from '../lib/firebase';
+import { UserProfileData, calculateAccountValidity } from '../lib/firebase';
 import { formatCpf, formatCnpj, formatPhone, formatPlaca } from '../utils/telegramCommandHelper';
 
 interface ProSearchModalProps {
@@ -43,6 +43,7 @@ interface ProSearchModalProps {
   loadingStepText?: string;
   activeRecord?: QueryRecord | null;
   onOpenPricing: () => void;
+  cooldownSeconds?: number;
 }
 
 export const ProSearchModal: React.FC<ProSearchModalProps> = ({
@@ -54,6 +55,7 @@ export const ProSearchModal: React.FC<ProSearchModalProps> = ({
   loadingStepText,
   activeRecord,
   onOpenPricing,
+  cooldownSeconds = 0,
 }) => {
   const defaultAvailableModule = PRO_MODULES.find((m) => !m.inDevelopment) || PRO_MODULES[1] || PRO_MODULES[0];
   const [selectedModule, setSelectedModule] = useState<ProModuleInfo>(defaultAvailableModule);
@@ -112,10 +114,11 @@ export const ProSearchModal: React.FC<ProSearchModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const query = inputVal.trim();
-    if (!query || isLoading || selectedModule.inDevelopment) return;
+    if (!query || isLoading || selectedModule.inDevelopment || cooldownSeconds > 0) return;
 
-    // Quota check
-    if (userProfile?.plan === 'trial' && (userProfile.consultasRestantes || 0) <= 0) {
+    // Trial expiration check (24h period)
+    const validity = calculateAccountValidity(userProfile);
+    if (userProfile?.plan === 'trial' && !validity.isValid) {
       onOpenPricing();
       return;
     }
@@ -235,7 +238,7 @@ export const ProSearchModal: React.FC<ProSearchModalProps> = ({
   if (!isOpen) return null;
 
   const isProRecord = activeRecord?.moduleType?.startsWith('pro_');
-  const saldoRestante = userProfile?.consultasRestantes ?? 10;
+  const validity = calculateAccountValidity(userProfile);
   const isTrial = userProfile?.plan === 'trial';
 
   return (
@@ -266,25 +269,27 @@ export const ProSearchModal: React.FC<ProSearchModalProps> = ({
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Quota Counter */}
+            {/* Trial Status / Plan Badge */}
             <div 
               onClick={() => isTrial && onOpenPricing()}
               className={`px-3 py-1.5 rounded-[8px] border flex items-center gap-2 cursor-pointer transition-colors ${
                 isTrial 
-                  ? saldoRestante > 2 
+                  ? validity.isValid 
                     ? 'bg-[#003734] border-[#00827c]/40 text-[#cbfffc]' 
-                    : 'bg-amber-950/40 border-amber-500/40 text-amber-300'
+                    : 'bg-rose-950/40 border-rose-500/40 text-rose-300'
                   : 'bg-[#ffd166]/10 border-[#ffd166]/30 text-[#ffd166]'
               }`}
-              title="Clique para ver planos de recarga"
+              title="Clique para ver planos de assinatura"
             >
               <Crown className="w-3.5 h-3.5 text-[#ffd166]" />
               <div className="flex flex-col text-right">
                 <span className="text-[9px] uppercase tracking-wider font-mono font-medium">
-                  {isTrial ? 'Cota Trial' : 'Plano Ilimitado'}
+                  {isTrial ? 'Teste 24h' : 'Plano Ilimitado'}
                 </span>
                 <span className="text-xs font-mono font-bold">
-                  {isTrial ? `${saldoRestante} / 10 rest.` : 'ATIVO'}
+                  {isTrial 
+                    ? (validity.isValid ? `${validity.hoursRemaining}h rest.` : 'EXPIRADO') 
+                    : 'ATIVO'}
                 </span>
               </div>
             </div>
@@ -419,6 +424,21 @@ export const ProSearchModal: React.FC<ProSearchModalProps> = ({
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Banner Informativo de Cooldown (15s Obrigatórios) */}
+              {cooldownSeconds > 0 && (
+                <div className="p-3 rounded-[8px] bg-[#011d1c] border border-[#ffd166]/40 text-[#ffd166] flex items-center justify-between gap-2 shadow-md animate-in fade-in duration-200">
+                  <div className="flex items-center gap-2 text-xs">
+                    <Clock className="w-4 h-4 text-[#ffd166] animate-pulse shrink-0" />
+                    <span>
+                      Aguarde <strong className="font-mono text-[#ffffff]">{cooldownSeconds}s</strong> para realizar uma nova consulta.
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#ffd166]/20 font-bold">
+                    {cooldownSeconds}s
+                  </span>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-mono uppercase tracking-[0.08em] text-[#cbfffc] mb-1.5">
                   {selectedModule.inputLabel}
@@ -440,13 +460,19 @@ export const ProSearchModal: React.FC<ProSearchModalProps> = ({
                   <div className="absolute inset-y-0 right-1.5 flex items-center">
                     <button
                       type="submit"
-                      disabled={isLoading || !inputVal.trim()}
+                      disabled={isLoading || !inputVal.trim() || cooldownSeconds > 0}
+                      title={cooldownSeconds > 0 ? `Aguarde ${cooldownSeconds}s para nova consulta.` : undefined}
                       className="px-4 py-2 rounded-[8px] bg-gradient-to-r from-[#ffd166] via-[#f59e0b] to-[#d97706] hover:brightness-110 disabled:opacity-50 text-[#0f172a] font-bold text-xs uppercase tracking-wider font-mono flex items-center gap-2 cursor-pointer shadow-md shadow-[#ffd166]/20 transition-all disabled:cursor-not-allowed"
                     >
                       {isLoading ? (
                         <>
                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
                           <span>Buscando...</span>
+                        </>
+                      ) : cooldownSeconds > 0 ? (
+                        <>
+                          <Clock className="w-3.5 h-3.5 animate-spin" />
+                          <span>Aguarde ({cooldownSeconds}s)</span>
                         </>
                       ) : (
                         <>
@@ -460,7 +486,7 @@ export const ProSearchModal: React.FC<ProSearchModalProps> = ({
                 <div className="flex items-center justify-between mt-2 text-[11px] text-[#bbc7c6]">
                   <span>{selectedModule.inputHelper}</span>
                   <span className="font-mono text-[#ffd166]">
-                    Desconto: 1 consulta por disparo
+                    {isTrial ? 'Acesso liberado no Teste 24h' : 'Acesso Ilimitado'}
                   </span>
                 </div>
               </div>

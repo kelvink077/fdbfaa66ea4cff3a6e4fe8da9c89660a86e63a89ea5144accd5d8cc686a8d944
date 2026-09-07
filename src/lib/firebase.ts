@@ -104,27 +104,30 @@ export function calculateAccountValidity(profile?: UserProfileData | null): {
   const rawExpiry = profile.validUntil || profile.trialEndsAt || profile.createdAt;
   const expiryDate = new Date(rawExpiry);
   const isValidDate = !isNaN(expiryDate.getTime());
-  const targetDate = isValidDate ? expiryDate : new Date(now.getTime() + 7 * 86400000);
+  const targetDate = isValidDate ? expiryDate : new Date(now.getTime() + 24 * 3600000);
 
   const diffMs = targetDate.getTime() - now.getTime();
   const isExpired = diffMs <= 0;
   const daysRemaining = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
   const hoursRemaining = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60)));
+  const minutesRemaining = Math.max(0, Math.ceil(diffMs / (1000 * 60)));
 
-  const isTrial = profile.planStatus === 'trial' || profile.plan === 'premium';
+  const isTrial = profile.planStatus === 'trial' || profile.plan === 'trial';
   
   let planDisplayName = 'Plano Shazam Premium';
   if (profile.plan === 'weekly') planDisplayName = 'Plano Semanal (7 Dias)';
   else if (profile.plan === 'biweekly') planDisplayName = 'Plano 15 Dias';
   else if (profile.plan === 'monthly') planDisplayName = 'Plano Mensal (30 Dias)';
-  else if (profile.plan === 'trial') planDisplayName = 'Teste Grátis (10 Consultas)';
+  else if (profile.plan === 'trial') planDisplayName = 'Teste Grátis (24 Horas)';
   else if (profile.planName) planDisplayName = profile.planName;
 
   let statusText = 'Ativo';
   if (isExpired) {
-    statusText = 'Assinatura Expirada';
-  } else if (isTrial && profile.planStatus === 'trial') {
-    statusText = `Teste Grátis (${profile.consultasRestantes || 0} consultas restantes)`;
+    statusText = isTrial ? 'Teste Grátis Expirado (24h encerradas)' : 'Assinatura Expirada';
+  } else if (isTrial) {
+    statusText = hoursRemaining > 1 
+      ? `Teste Grátis (${hoursRemaining} horas restantes)`
+      : `Teste Grátis (${minutesRemaining} min restantes)`;
   } else {
     statusText = `Plano Ativo (${daysRemaining}d restantes)`;
   }
@@ -151,12 +154,13 @@ export function calculateAccountValidity(profile?: UserProfileData | null): {
 }
 
 /**
- * Sincroniza e garante o plano com teste grátis (10 consultas) para novos clientes
+ * Sincroniza e garante o plano com teste grátis (24 horas) para novos clientes
  */
 export async function syncUserProfile(user: User): Promise<UserProfileData> {
   const userRef = doc(db, 'users', user.uid);
   const now = new Date();
   const nowIso = now.toISOString();
+  const trialDurationMs = 24 * 60 * 60 * 1000; // 24 horas
 
   try {
     const docSnap = await getDoc(userRef);
@@ -164,21 +168,21 @@ export async function syncUserProfile(user: User): Promise<UserProfileData> {
     if (docSnap.exists()) {
       const existing = docSnap.data() as Partial<UserProfileData>;
       
-      const trialEndsAt = existing.validUntil || existing.trialEndsAt || new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString();
+      const trialEndsAt = existing.validUntil || existing.trialEndsAt || new Date(now.getTime() + trialDurationMs).toISOString();
       const updatedProfile: UserProfileData = {
         id: user.uid,
         email: user.email || existing.email || '',
         displayName: user.displayName || existing.displayName || 'Operador',
         photoURL: user.photoURL || existing.photoURL || '',
         plan: existing.plan || 'trial',
-        planName: existing.planName || 'Teste Grátis',
+        planName: existing.plan === 'trial' ? 'Teste Grátis (24 Horas)' : (existing.planName || 'Plano Shazam Premium'),
         planStatus: existing.planStatus || 'trial',
         trialStartedAt: existing.trialStartedAt || nowIso,
         trialEndsAt: trialEndsAt,
         validUntil: existing.validUntil || trialEndsAt,
-        trialDaysTotal: existing.trialDaysTotal || 7,
+        trialDaysTotal: 1,
         totalDaysCredited: existing.totalDaysCredited || 0,
-        consultasRestantes: existing.consultasRestantes !== undefined ? existing.consultasRestantes : 10,
+        consultasRestantes: existing.consultasRestantes !== undefined ? existing.consultasRestantes : 999,
         createdAt: existing.createdAt || nowIso,
         lastLoginAt: nowIso,
         recentPayments: existing.recentPayments || [],
@@ -187,22 +191,22 @@ export async function syncUserProfile(user: User): Promise<UserProfileData> {
       await setDoc(userRef, { lastLoginAt: nowIso }, { merge: true });
       return updatedProfile;
     } else {
-      // Novo cliente cadastrado com o Google: ganha Plano Trial com 10 Consultas
-      const longExpiration = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString();
+      // Novo cliente cadastrado com o Google: ganha Teste Gratuito de 24 Horas
+      const trialExpiration = new Date(now.getTime() + trialDurationMs).toISOString();
       const newProfile: UserProfileData = {
         id: user.uid,
         email: user.email || '',
         displayName: user.displayName || 'Operador',
         photoURL: user.photoURL || '',
         plan: 'trial',
-        planName: 'Teste Grátis (10 Consultas)',
+        planName: 'Teste Grátis (24 Horas)',
         planStatus: 'trial',
         trialStartedAt: nowIso,
-        trialEndsAt: longExpiration,
-        validUntil: longExpiration,
-        trialDaysTotal: 7,
+        trialEndsAt: trialExpiration,
+        validUntil: trialExpiration,
+        trialDaysTotal: 1,
         totalDaysCredited: 0,
-        consultasRestantes: 10, // DEFINE AS 10 CONSULTAS AQUI
+        consultasRestantes: 999, // Acesso completo durante o teste de 24h
         createdAt: nowIso,
         lastLoginAt: nowIso,
         recentPayments: [],
@@ -213,21 +217,21 @@ export async function syncUserProfile(user: User): Promise<UserProfileData> {
     }
   } catch (err) {
     console.warn('[Firebase] Erro ao sincronizar perfil do usuário no Firestore:', err);
-    const longExpiration = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString();
+    const trialExpiration = new Date(now.getTime() + trialDurationMs).toISOString();
     return {
       id: user.uid,
       email: user.email || '',
       displayName: user.displayName || 'Operador',
       photoURL: user.photoURL || '',
       plan: 'trial',
-      planName: 'Teste Grátis (10 Consultas)',
+      planName: 'Teste Grátis (24 Horas)',
       planStatus: 'trial',
       trialStartedAt: nowIso,
-      trialEndsAt: longExpiration,
-      validUntil: longExpiration,
-      trialDaysTotal: 7,
+      trialEndsAt: trialExpiration,
+      validUntil: trialExpiration,
+      trialDaysTotal: 1,
       totalDaysCredited: 0,
-      consultasRestantes: 10,
+      consultasRestantes: 999,
       createdAt: nowIso,
       lastLoginAt: nowIso,
       recentPayments: [],
@@ -387,13 +391,13 @@ export async function loginWithGoogle(): Promise<{ user: User; profile: UserProf
  */
 export function createGuestOperatorUser(): { user: any; profile: UserProfileData } {
   const now = new Date();
-  const longExpiration = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString();
+  const trialExpiration = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
   const guestId = 'guest_' + Math.random().toString(36).substring(2, 9);
   
   const mockUser: any = {
     uid: guestId,
     email: 'operador.demo@shazam.terminal',
-    displayName: 'Operador Convidado (Modo Teste)',
+    displayName: 'Operador Convidado (Modo Teste 24h)',
     photoURL: '',
     isAnonymous: true,
   };
@@ -401,17 +405,17 @@ export function createGuestOperatorUser(): { user: any; profile: UserProfileData
   const profile: UserProfileData = {
     id: guestId,
     email: 'operador.demo@shazam.terminal',
-    displayName: 'Operador Convidado (Modo Teste)',
+    displayName: 'Operador Convidado (Modo Teste 24h)',
     photoURL: '',
     plan: 'trial',
-    planName: 'Teste Grátis (10 Consultas)',
+    planName: 'Teste Grátis (24 Horas)',
     planStatus: 'trial',
     trialStartedAt: now.toISOString(),
-    trialEndsAt: longExpiration,
-    validUntil: longExpiration,
-    trialDaysTotal: 7,
+    trialEndsAt: trialExpiration,
+    validUntil: trialExpiration,
+    trialDaysTotal: 1,
     totalDaysCredited: 0,
-    consultasRestantes: 10,
+    consultasRestantes: 999,
     createdAt: now.toISOString(),
     lastLoginAt: now.toISOString(),
     recentPayments: [],

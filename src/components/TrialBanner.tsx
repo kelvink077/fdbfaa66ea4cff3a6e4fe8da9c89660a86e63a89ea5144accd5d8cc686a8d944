@@ -38,8 +38,7 @@ export const TrialBanner: React.FC<TrialBannerProps> = ({
   const validity = calculateAccountValidity(userProfile);
   
   const isTrial = userProfile?.plan === 'trial';
-  const saldo = userProfile?.consultasRestantes ?? 0;
-  const isTrialExhausted = isTrial && saldo <= 0;
+  const isTrialExhausted = isTrial && validity.isExpired;
 
   if (isDismissed) {
     return (
@@ -49,9 +48,9 @@ export const TrialBanner: React.FC<TrialBannerProps> = ({
           <span>
             {currentUser 
               ? (isTrial 
-                  ? `Teste Grátis: ${saldo} ${saldo === 1 ? 'consulta restante' : 'consultas restantes'}` 
+                  ? `Teste Grátis (24h): ${validity.isValid ? (validity.hoursRemaining > 1 ? `${validity.hoursRemaining} horas restantes` : `${validity.hoursRemaining === 1 ? '1 hora restante' : 'menos de 1 hora restante'}`) : 'Expirado'}` 
                   : `${validity.planDisplayName}: ${validity.daysRemaining} dias de acesso restantes (Válido até ${validity.expirationDateFormatted})`)
-              : 'Novos clientes: Cadastre-se com o Google e ganhe 10 consultas grátis no Plano Premium!'}
+              : 'Novos clientes: Cadastre-se com o Google e ganhe teste gratuito de 24 horas no Plano Premium!'}
           </span>
         </div>
         <div className="flex items-center gap-3">
@@ -88,7 +87,7 @@ export const TrialBanner: React.FC<TrialBannerProps> = ({
             <div className="flex items-center gap-3">
               <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
               <span className="text-sm font-medium tracking-tight">
-                Suas consultas gratuitas acabaram. Faça o upgrade para continuar usando o motor de buscas.
+                Seu teste gratuito de 24 horas encerrou. Faça o upgrade para continuar usando o motor de buscas Shazam.
               </span>
             </div>
             <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
@@ -107,7 +106,7 @@ export const TrialBanner: React.FC<TrialBannerProps> = ({
       );
     }
 
-    // CENÁRIO 2: TESTE GRÁTIS ATIVO (Banner Amarelo)
+    // CENÁRIO 2: TESTE GRÁTIS ATIVO (Banner Amarelo 24 Horas)
     if (isTrial) {
       return (
         <aside 
@@ -116,22 +115,22 @@ export const TrialBanner: React.FC<TrialBannerProps> = ({
           <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
             <div className="flex items-center gap-3 flex-wrap">
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] bg-[#ffd166]/15 border border-[#ffd166]/40 text-[#ffd166] text-xs font-mono font-medium tracking-wide">
-                <Search className="w-3.5 h-3.5 text-[#ffd166] animate-pulse" />
-                <span>TESTE GRÁTIS ATIVO</span>
+                <Clock className="w-3.5 h-3.5 text-[#ffd166] animate-pulse" />
+                <span>TESTE GRÁTIS ATIVO (24 HORAS)</span>
               </div>
               <span className="font-medium text-xs sm:text-sm text-[#ffffff] tracking-tight">
-                Você ainda tem <strong className="text-[#ffd166]">{saldo} {saldo === 1 ? 'consulta' : 'consultas'}</strong> gratuitas disponíveis.
+                Seu período de teste de 24 horas está liberado: restam <strong className="text-[#ffd166] font-mono">{validity.hoursRemaining > 1 ? `${validity.hoursRemaining} horas` : `${validity.hoursRemaining === 1 ? '1 hora' : 'menos de 1 hora'}`}</strong> (válido até {validity.expirationDateFormatted}).
               </span>
             </div>
             
             <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
-              {saldo <= 5 && onOpenPricing && (
+              {onOpenPricing && (
                 <button 
                   onClick={onOpenPricing} 
                   className="flex items-center gap-1.5 text-xs bg-[#ffd166] hover:bg-[#ffc233] text-[#011d1c] px-3 py-1.5 rounded-[6px] font-bold uppercase transition-colors cursor-pointer shadow-sm"
                 >
                   <Zap className="w-3.5 h-3.5" />
-                  <span>Fazer Upgrade</span>
+                  <span>Assinar Plano Completo</span>
                 </button>
               )}
               <button
@@ -237,7 +236,7 @@ export const TrialBanner: React.FC<TrialBannerProps> = ({
           </div>
 
           <p className="text-xs sm:text-sm text-[#ffffff]">
-            Registre-se com o Google e ganhe o <strong className="text-[#ffd166]">Plano Premium</strong> com <strong className="text-[#cbfffc] underline decoration-[#00827c]">10 consultas grátis</strong>!
+            Registre-se com o Google e ganhe o <strong className="text-[#ffd166]">Plano Premium</strong> com <strong className="text-[#cbfffc] underline decoration-[#00827c]">teste gratuito de 24 horas</strong>!
           </p>
         </div>
 
@@ -249,7 +248,7 @@ export const TrialBanner: React.FC<TrialBannerProps> = ({
             className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-[6px] bg-[#cbfffc] hover:bg-[#a5fbf8] text-[#012624] font-medium text-xs tracking-wide uppercase font-mono transition-all cursor-pointer shadow-sm hover:scale-[1.02]"
           >
             <LogIn className="w-3.5 h-3.5" />
-            <span>Ativar Teste (10 Consultas)</span>
+            <span>Ativar Teste Grátis (24 Horas)</span>
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
 

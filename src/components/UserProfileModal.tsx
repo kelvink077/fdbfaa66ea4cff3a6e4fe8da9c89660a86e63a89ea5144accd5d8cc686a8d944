@@ -45,17 +45,16 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
   const validity = calculateAccountValidity(userProfile);
   
-  // Lógica inteligente para alternar entre "Consultas" (Teste) e "Dias" (Pago)
+  // Lógica inteligente para alternar entre "Teste 24 Horas" e "Assinatura Paga"
   const isTrial = userProfile?.plan === 'trial';
-  const saldo = userProfile?.consultasRestantes ?? 0;
+  const isActuallyValid = validity.isValid;
   
-  const isActuallyValid = isTrial ? saldo > 0 : validity.isValid;
   const statusBadgeText = isTrial 
-    ? (saldo > 0 ? '● Teste Ativo' : '● Esgotado') 
+    ? (isActuallyValid ? '● Teste 24h Ativo' : '● Teste 24h Expirado') 
     : (validity.isValid ? '● Acesso Liberado' : '● Expirado');
 
   const progressBarWidth = isTrial
-    ? Math.min(100, Math.max(5, (saldo / 10) * 100))
+    ? Math.min(100, Math.max(5, (validity.hoursRemaining / 24) * 100))
     : Math.min(100, Math.max(5, (validity.daysRemaining / 30) * 100));
 
   return (
@@ -125,7 +124,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 text-[#cbfffc]" />
               <span className="text-xs font-mono font-semibold text-[#cbfffc] uppercase tracking-wider">
-                {isTrial ? 'Saldo de Consultas' : 'Validade da Conta'}
+                {isTrial ? 'Período de Teste Gratuito' : 'Validade da Conta'}
               </span>
             </div>
 
@@ -142,11 +141,11 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           <div className="my-4">
             <div className="flex items-baseline gap-2">
               <span className="text-3xl sm:text-4xl font-mono font-bold text-[#ffffff] tracking-tight">
-                {isTrial ? saldo : validity.daysRemaining}
+                {isTrial ? validity.hoursRemaining : validity.daysRemaining}
               </span>
               <span className="text-sm font-mono text-[#cbfffc] uppercase tracking-wider">
                 {isTrial 
-                  ? (saldo === 1 ? 'consulta restante' : 'consultas restantes')
+                  ? (validity.hoursRemaining === 1 ? 'hora restante (teste 24h)' : 'horas restantes (teste 24h)')
                   : (validity.daysRemaining === 1 ? 'dia restante' : 'dias restantes')}
               </span>
             </div>

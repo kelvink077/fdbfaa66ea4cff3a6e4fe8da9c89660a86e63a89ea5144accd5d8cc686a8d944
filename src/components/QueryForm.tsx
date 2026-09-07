@@ -19,6 +19,7 @@ interface QueryFormProps {
   onSearch: (moduleType: QueryModuleType, queryParam: string, isPro?: boolean) => void;
   isProMode?: boolean;
   onToggleProMode?: (isPro: boolean) => void;
+  cooldownSeconds?: number;
 }
 
 export const QueryForm: React.FC<QueryFormProps> = ({
@@ -27,6 +28,7 @@ export const QueryForm: React.FC<QueryFormProps> = ({
   onSearch,
   isProMode = false,
   onToggleProMode,
+  cooldownSeconds = 0,
 }) => {
   const [inputValue, setInputValue] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -51,6 +53,10 @@ export const QueryForm: React.FC<QueryFormProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (cooldownSeconds > 0) {
+      setErrorMessage(`Aguarde ${cooldownSeconds} segundo${cooldownSeconds !== 1 ? 's' : ''} para realizar uma nova consulta.`);
+      return;
+    }
     const validation = validateInput(inputValue, moduleInfo.id);
     if (!validation.isValid) {
       setErrorMessage(validation.message || 'Dado inválido para a consulta selecionada.');
@@ -155,6 +161,43 @@ export const QueryForm: React.FC<QueryFormProps> = ({
         </button>
       </div>
 
+      {/* Banner Informativo de Cooldown (15 Segundos Obrigatórios) */}
+      {cooldownSeconds > 0 && (
+        <div className="p-3.5 sm:p-4 rounded-[12px] bg-[#011d1c] border border-[#ffd166]/50 text-[#ffd166] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg shadow-[#ffd166]/5 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-[#ffd166]/15 border border-[#ffd166]/40 flex items-center justify-center shrink-0">
+              <Clock className="w-4 h-4 text-[#ffd166] animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs sm:text-sm font-semibold text-[#ffffff] font-['DM_Sans',sans-serif]">
+                  Aguarde para Nova Consulta
+                </span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#ffd166]/20 text-[#ffd166] font-mono font-bold">
+                  INTERVALO DE 15S
+                </span>
+              </div>
+              <p className="text-[11px] sm:text-xs text-[#bbc7c6] mt-0.5">
+                Por favor, aguarde <strong className="text-[#ffd166] font-mono text-xs sm:text-sm">{cooldownSeconds} segundo{cooldownSeconds !== 1 ? 's' : ''}</strong> para realizar uma nova consulta.
+              </p>
+            </div>
+          </div>
+
+          <div className="w-full sm:w-44 flex flex-col items-end gap-1.5 shrink-0">
+            <div className="flex items-center justify-between w-full text-[11px] font-mono">
+              <span className="text-[#bbc7c6]">Disponível em:</span>
+              <span className="text-[#ffd166] font-bold text-sm">{cooldownSeconds}s</span>
+            </div>
+            <div className="w-full h-1.5 rounded-full bg-[#003734] overflow-hidden">
+              <div 
+                className="h-full bg-gradient-to-r from-[#ffd166] to-[#f59e0b] transition-all duration-300 rounded-full"
+                style={{ width: `${Math.min(100, Math.max(0, ((15 - cooldownSeconds) / 15) * 100))}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Query Search Input Form */}
       <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
         <div className="relative">
@@ -180,13 +223,20 @@ export const QueryForm: React.FC<QueryFormProps> = ({
           <button
             type="submit"
             id="btn-submit-search"
-            disabled={isLoading || !inputValue}
-            className={`absolute right-1.5 sm:right-2.5 top-1.5 sm:top-2.5 bottom-1.5 sm:bottom-2.5 px-3.5 sm:px-8 rounded-[6px] flex items-center justify-center gap-1.5 sm:gap-2 transition-all text-xs sm:text-sm font-medium uppercase tracking-[0.08em] cursor-pointer ${
+            disabled={isLoading || !inputValue || cooldownSeconds > 0}
+            title={
+              cooldownSeconds > 0
+                ? `Aguarde ${cooldownSeconds} segundos para realizar uma nova consulta.`
+                : undefined
+            }
+            className={`absolute right-1.5 sm:right-2.5 top-1.5 sm:top-2.5 bottom-1.5 sm:bottom-2.5 px-3.5 sm:px-8 rounded-[6px] flex items-center justify-center gap-1.5 sm:gap-2 transition-all text-xs sm:text-sm font-medium uppercase tracking-[0.08em] ${
               isLoading || !inputValue
                 ? 'bg-[#003734] text-[#707777] cursor-not-allowed border border-[#707777]/20'
+                : cooldownSeconds > 0
+                ? 'bg-[#003734] border border-[#ffd166]/40 text-[#ffd166] cursor-not-allowed shadow-inner'
                 : isProMode
-                ? 'bg-gradient-to-r from-[#ffd166] via-[#f59e0b] to-[#d97706] hover:brightness-110 text-[#0f172a] font-bold shadow-md shadow-[#ffd166]/20'
-                : 'bg-aurora-gradient text-[#012624] hover:opacity-90'
+                ? 'bg-gradient-to-r from-[#ffd166] via-[#f59e0b] to-[#d97706] hover:brightness-110 text-[#0f172a] font-bold shadow-md shadow-[#ffd166]/20 cursor-pointer'
+                : 'bg-aurora-gradient text-[#012624] hover:opacity-90 cursor-pointer'
             }`}
           >
             {isLoading ? (
@@ -194,6 +244,12 @@ export const QueryForm: React.FC<QueryFormProps> = ({
                 <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin text-[#012624]" />
                 <span className="hidden sm:inline">PROCESSANDO</span>
                 <span className="sm:hidden text-[11px]">BUSCANDO</span>
+              </>
+            ) : cooldownSeconds > 0 ? (
+              <>
+                <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#ffd166] animate-spin" />
+                <span className="hidden sm:inline text-[#ffd166] font-mono">AGUARDE ({cooldownSeconds}s)</span>
+                <span className="sm:hidden text-[11px] text-[#ffd166] font-mono">{cooldownSeconds}s</span>
               </>
             ) : (
               <>

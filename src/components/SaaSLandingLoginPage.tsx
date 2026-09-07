@@ -54,14 +54,14 @@ export const SaaSLandingLoginPage: React.FC<SaaSLandingLoginPageProps> = ({
             NOVO CLIENTE
           </span>
           <span>
-            Cadastre-se com o Google e ganhe o <strong className="text-[#ffd166]">Plano Premium</strong> com <strong className="text-[#cbfffc] underline decoration-[#00827c]">10 consultas grátis</strong>!
+            Cadastre-se com o Google e ganhe o <strong className="text-[#ffd166]">Plano Premium</strong> com <strong className="text-[#cbfffc] underline decoration-[#00827c]">teste gratuito de 24 horas</strong>!
           </span>
           <button
             onClick={onLoginGoogle}
             disabled={isAuthLoading}
             className="ml-2 text-[#cbfffc] hover:text-[#ffffff] font-medium underline flex items-center gap-1 cursor-pointer"
           >
-            <span>Ativar Agora</span>
+            <span>Ativar Teste 24h</span>
             <ChevronRight className="w-3 h-3" />
           </button>
         </div>
@@ -148,7 +148,7 @@ export const SaaSLandingLoginPage: React.FC<SaaSLandingLoginPageProps> = ({
           <p className="text-base sm:text-lg text-[#bbc7c6] max-w-3xl mx-auto leading-relaxed">
             Acesse a central de busca e validação investigativa <strong className="text-[#ffffff]">Shazam Buscas</strong>. 
             Dossiês completos de veículos, pessoas físicas, CNPJ e localização com criptografia ponta a ponta. 
-            O sistema exige autenticação corporativa segura e disponibiliza <strong className="text-[#ffd166]">10 consultas de teste grátis</strong> ao entrar com o Google.
+            O sistema exige autenticação corporativa segura e disponibiliza <strong className="text-[#ffd166]">teste gratuito de 24 horas</strong> com acesso liberado ao entrar com o Google.
           </p>
 
           {/* Direct CTA Box (Authentication required to enter system) */}
@@ -181,7 +181,7 @@ export const SaaSLandingLoginPage: React.FC<SaaSLandingLoginPageProps> = ({
                   />
                 </svg>
               )}
-              <span>Entrar com Google & Ativar 10 Consultas Grátis</span>
+              <span>Entrar com Google & Ativar Teste Grátis de 24h</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
@@ -259,7 +259,7 @@ export const SaaSLandingLoginPage: React.FC<SaaSLandingLoginPageProps> = ({
               Planos Transparentes e Acessíveis
             </h2>
             <p className="text-sm text-[#bbc7c6] max-w-2xl mx-auto">
-              Selecione o plano ideal para suas operações. Todos contam com o período de teste de 10 consultas liberado imediatamente ao autenticar com o Google.
+              Selecione o plano ideal para suas operações. Todos contam com o período de teste gratuito de 24 horas liberado imediatamente ao autenticar com o Google.
             </p>
           </div>
 
@@ -311,7 +311,7 @@ export const SaaSLandingLoginPage: React.FC<SaaSLandingLoginPageProps> = ({
                     </div>
                     <div className="mt-1 flex items-center gap-2 text-[11px] text-[#707777]">
                       <span className="line-through">De R$ {plan.originalPrice}</span>
-                      <span className="text-[#cbfffc] font-mono font-medium">10 consultas grátis</span>
+                      <span className="text-[#cbfffc] font-mono font-medium">Teste 24h grátis</span>
                     </div>
                   </div>
 
@@ -339,7 +339,7 @@ export const SaaSLandingLoginPage: React.FC<SaaSLandingLoginPageProps> = ({
                     }`}
                   >
                     <Crown className="w-3.5 h-3.5" />
-                    <span>Cadastrar e Ganhar 10 Consultas</span>
+                    <span>Cadastrar e Ativar Teste 24h</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
 
@@ -441,7 +441,7 @@ export const SaaSLandingLoginPage: React.FC<SaaSLandingLoginPageProps> = ({
             <div className="p-4 rounded-[10px] bg-[#00302d]/70 border border-[#00827c]/25 space-y-1.5">
               <h4 className="font-medium text-[#ffffff] text-sm">Como obter acesso ao sistema?</h4>
               <p>
-                O sistema é estritamente autenticado. Basta entrar com sua conta Google para liberar o acesso ao terminal e receber as 10 consultas de teste gratuitas.
+                O sistema é estritamente autenticado. Basta entrar com sua conta Google para liberar o acesso ao terminal e receber o período de teste gratuito de 24 horas.
               </p>
             </div>
 

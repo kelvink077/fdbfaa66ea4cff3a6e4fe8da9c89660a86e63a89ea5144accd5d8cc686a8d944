@@ -1982,6 +1982,10 @@ async function executeRestartAndRetry(options: {
   }
 }
 
+// Rate limiting: Cooldown mandatório de 15 segundos entre cada consulta
+const clientQueryCooldowns = new Map<string, number>();
+const QUERY_COOLDOWN_MS = 15000;
+
 io.on('connection', (socket) => {
   // Envia estado em tempo real assim que o cliente conecta
   socket.emit('system:status', {
@@ -2007,6 +2011,21 @@ io.on('connection', (socket) => {
     const { moduleType, queryParam } = payload;
     if (!moduleType || !queryParam) return;
     
+    // Verificação de cooldown de 15 segundos entre consultas
+    const clientKey = socket.id || socket.handshake.address;
+    const now = Date.now();
+    const lastTime = clientQueryCooldowns.get(clientKey) || 0;
+    const diff = now - lastTime;
+    if (diff < QUERY_COOLDOWN_MS) {
+      const remainingSeconds = Math.max(1, Math.ceil((QUERY_COOLDOWN_MS - diff) / 1000));
+      socket.emit('query:rate_limit', {
+        remainingSeconds,
+        message: `Por favor, aguarde ${remainingSeconds} segundo${remainingSeconds !== 1 ? 's' : ''} para realizar uma nova consulta.`,
+      });
+      return;
+    }
+    clientQueryCooldowns.set(clientKey, now);
+
     // Identificação infalível de modo KREX ou PRO
     const isZyrex = Boolean(
       payload.isZyrex === true ||
@@ -2942,6 +2961,22 @@ app.post('/api/query/request', async (req, res) => {
   if (!moduleType || !queryParam) {
     return res.status(400).json({ ok: false, error: 'Parâmetros inválidos' });
   }
+
+  // Verificação de cooldown de 15 segundos entre consultas
+  const clientKey = (req.headers['x-forwarded-for'] as string) || req.ip || 'http-client';
+  const now = Date.now();
+  const lastTime = clientQueryCooldowns.get(clientKey) || 0;
+  const diff = now - lastTime;
+  if (diff < QUERY_COOLDOWN_MS) {
+    const remainingSeconds = Math.max(1, Math.ceil((QUERY_COOLDOWN_MS - diff) / 1000));
+    return res.status(429).json({
+      ok: false,
+      cooldown: true,
+      remainingSeconds,
+      error: `Aguarde ${remainingSeconds} segundo${remainingSeconds !== 1 ? 's' : ''} para realizar uma nova consulta.`,
+    });
+  }
+  clientQueryCooldowns.set(clientKey, now);
 
   const isZyrex = Boolean(
     req.body.isZyrex === true ||

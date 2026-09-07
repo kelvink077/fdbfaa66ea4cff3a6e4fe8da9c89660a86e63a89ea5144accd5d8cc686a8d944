@@ -44,13 +44,56 @@ import {
   CheckCircle2, 
   Radio,
   FileCode,
-  Zap
+  Zap,
+  Clock,
+  X
 } from 'lucide-react';
 
 export default function App() {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [socketId, setSocketId] = useState<string | null>(null);
+
+  // Sistema de Cooldown de 15 Segundos entre Consultas
+  const [cooldownSeconds, setCooldownSeconds] = useState<number>(0);
+  const [cooldownToast, setCooldownToast] = useState<{ message: string; remainingSeconds: number } | null>(null);
+  const cooldownTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const triggerCooldown = (seconds: number = 15, customMessage?: string) => {
+    if (cooldownTimerRef.current) {
+      clearInterval(cooldownTimerRef.current);
+    }
+    const initial = Math.max(1, seconds);
+    setCooldownSeconds(initial);
+    setCooldownToast({
+      remainingSeconds: initial,
+      message: customMessage || `Aguarde ${initial} segundos para realizar uma nova consulta.`,
+    });
+
+    cooldownTimerRef.current = setInterval(() => {
+      setCooldownSeconds((prev) => {
+        if (prev <= 1) {
+          if (cooldownTimerRef.current) {
+            clearInterval(cooldownTimerRef.current);
+            cooldownTimerRef.current = null;
+          }
+          setCooldownToast(null);
+          return 0;
+        }
+        const next = prev - 1;
+        setCooldownToast((curr) => (curr ? { ...curr, remainingSeconds: next } : null));
+        return next;
+      });
+    }, 1000);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (cooldownTimerRef.current) {
+        clearInterval(cooldownTimerRef.current);
+      }
+    };
+  }, []);
 
   const [selectedModule, setSelectedModule] = useState<QueryModuleType>('cpf_1');
   const [isLoading, setIsLoading] = useState(false);
@@ -436,6 +479,15 @@ export default function App() {
       console.warn('Aviso na consulta:', err?.error || err);
     });
 
+    // Rate limit cooldown listener (15 segundos obrigatórios)
+    socketInstance.on('query:rate_limit', (data: any) => {
+      console.warn('[Socket.io Client] ⏱️ Limite de taxa (cooldown 15s):', data);
+      setIsLoading(false);
+      setLoadingStepText('');
+      const remaining = data?.remainingSeconds || 15;
+      triggerCooldown(remaining, data?.message);
+    });
+
     setSocket(socketInstance);
 
     return () => {
@@ -454,7 +506,7 @@ export default function App() {
       if (user) {
         console.log('[Firebase Auth] Usuário autenticado:', user.email);
         try {
-          // Garante perfil com Plano Premium e teste de 10 consultas (Trial)
+          // Garante perfil com Plano Premium e teste gratuito de 24 horas (Trial)
           const profile = await syncUserProfile(user);
           setUserProfile(profile);
 
@@ -561,6 +613,17 @@ export default function App() {
   // Handler: Start a search with Cota Check (10 Consultas)
   const handleSearch = async (moduleType: QueryModuleType, queryParam: string, isProParam?: boolean, isZyrexParam?: boolean) => {
     // ==============================================================
+    // 0. CHECAGEM DE COOLDOWN (INTERVALO OBRIGATÓRIO DE 15 SEGUNDOS)
+    // ==============================================================
+    if (cooldownSeconds > 0) {
+      setCooldownToast({
+        remainingSeconds: cooldownSeconds,
+        message: `Por favor, aguarde ${cooldownSeconds} segundo${cooldownSeconds !== 1 ? 's' : ''} para realizar uma nova consulta.`,
+      });
+      return;
+    }
+
+    // ==============================================================
     // 1. CHECAGEM DE COTA (LIMITE DE 10 CONSULTAS GRÁTIS)
     // ==============================================================
     if (userProfile?.plan === 'trial') {
@@ -575,6 +638,9 @@ export default function App() {
     setIsLoading(true);
     setActiveOptionsData(null);
     setLoadingStepText('Transmitindo solicitação via barramento em tempo real...');
+
+    // Ativa imediatamente o cooldown de 15 segundos para proteger o sistema e informar o cliente
+    triggerCooldown(15);
 
     const isZyrex = Boolean(
       isZyrexParam || 
@@ -603,6 +669,12 @@ export default function App() {
           body: JSON.stringify({ moduleType, queryParam, isPro, isZyrex, isKrex: isZyrex }),
         });
         const data = await res.json();
+        if (res.status === 429 || data.cooldown) {
+          setIsLoading(false);
+          const remaining = data.remainingSeconds || 15;
+          triggerCooldown(remaining, data.error);
+          return;
+        }
         if (data.ok && data.record) {
           setCurrentActiveRecord(data.record);
           setHistory((prev) => [data.record, ...prev]);
@@ -861,6 +933,7 @@ export default function App() {
               onSearch={handleSearch}
               isProMode={isProMode}
               onToggleProMode={setIsProMode}
+              cooldownSeconds={cooldownSeconds}
             />
 
             {/* Realtime Loading / Options Selection / Waiting State */}
@@ -1010,6 +1083,7 @@ export default function App() {
         loadingStepText={loadingStepText}
         activeRecord={currentActiveRecord}
         onOpenPricing={() => setIsPricingModalOpen(true)}
+        cooldownSeconds={cooldownSeconds}
       />
 
       {/* Rota Paralela BUSCAS KREX (KREX) */}
@@ -1023,6 +1097,7 @@ export default function App() {
         loadingStepText={loadingStepText}
         activeRecord={currentActiveRecord}
         onOpenPricing={() => setIsPricingModalOpen(true)}
+        cooldownSeconds={cooldownSeconds}
         activeOptionsData={activeOptionsData}
         onSelectOption={handleSelectOption}
       />
@@ -1037,6 +1112,47 @@ export default function App() {
         onOpenProModal={() => setIsProModalOpen(true)}
         onOpenKrexModal={() => setIsZyrexModalOpen(true)}
       />
+
+      {/* Floating Cooldown Notification Toast com Timer e Mensagem */}
+      {cooldownToast && (
+        <div 
+          id="cooldown-notification-toast"
+          role="alert"
+          aria-live="assertive"
+          className="fixed bottom-5 right-5 z-50 max-w-sm sm:max-w-md w-[calc(100vw-2.5rem)] bg-[#011d1c] border border-[#ffd166]/60 rounded-[14px] p-4 shadow-2xl shadow-black/80 flex items-start gap-3 animate-in fade-in slide-in-from-bottom-5 duration-300 backdrop-blur-md"
+        >
+          <div className="w-10 h-10 rounded-full bg-[#ffd166]/15 border border-[#ffd166]/40 flex items-center justify-center shrink-0">
+            <Clock className="w-5 h-5 text-[#ffd166] animate-pulse" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-bold uppercase tracking-[0.08em] font-mono text-[#ffd166]">
+                Intervalo de Consulta (15s)
+              </span>
+              <span className="text-xs font-extrabold font-mono px-2 py-0.5 rounded bg-[#ffd166]/20 text-[#ffd166] border border-[#ffd166]/30">
+                {cooldownToast.remainingSeconds}s
+              </span>
+            </div>
+            <p className="text-xs text-[#edfffe] mt-1.5 font-['DM_Sans',sans-serif] leading-relaxed">
+              {cooldownToast.message}
+            </p>
+            {/* Barra de progresso regressiva */}
+            <div className="w-full h-1.5 bg-[#003734] rounded-full mt-3 overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-[#ffd166] to-[#f59e0b] rounded-full transition-all duration-300"
+                style={{ width: `${Math.min(100, Math.max(0, ((15 - cooldownToast.remainingSeconds) / 15) * 100))}%` }}
+              />
+            </div>
+          </div>
+          <button
+            onClick={() => setCooldownToast(null)}
+            className="text-[#707777] hover:text-[#ffffff] p-1 transition-colors cursor-pointer shrink-0"
+            title="Fechar aviso"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

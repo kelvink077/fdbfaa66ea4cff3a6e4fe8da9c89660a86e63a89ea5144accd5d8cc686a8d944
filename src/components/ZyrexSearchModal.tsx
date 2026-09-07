@@ -42,6 +42,7 @@ interface ZyrexSearchModalProps {
   loadingStepText?: string;
   activeRecord?: QueryRecord | null;
   onOpenPricing: () => void;
+  cooldownSeconds?: number;
   activeOptionsData?: {
     requestId: string;
     prompt: string;
@@ -62,6 +63,7 @@ export const ZyrexSearchModal: React.FC<ZyrexSearchModalProps> = ({
   loadingStepText,
   activeRecord,
   onOpenPricing,
+  cooldownSeconds = 0,
   activeOptionsData,
   onSelectOption,
 }) => {
@@ -150,7 +152,7 @@ export const ZyrexSearchModal: React.FC<ZyrexSearchModalProps> = ({
   };
 
   const handleTriggerSearch = () => {
-    if (!inputVal.trim() || isLoading) return;
+    if (!inputVal.trim() || isLoading || cooldownSeconds > 0) return;
     onSearch(selectedModule.id, inputVal.trim(), true);
   };
 
@@ -347,6 +349,21 @@ export const ZyrexSearchModal: React.FC<ZyrexSearchModalProps> = ({
                 </span>
               </div>
 
+              {/* Banner Informativo de Cooldown (15s Obrigatórios) */}
+              {cooldownSeconds > 0 && (
+                <div className="p-3 rounded-[8px] bg-[#02181b] border border-[#ffd166]/40 text-[#ffd166] flex items-center justify-between gap-2 shadow-md animate-in fade-in duration-200 mb-2">
+                  <div className="flex items-center gap-2 text-xs">
+                    <Clock className="w-4 h-4 text-[#ffd166] animate-pulse shrink-0" />
+                    <span>
+                      Aguarde <strong className="font-mono text-[#ffffff]">{cooldownSeconds}s</strong> para realizar uma nova consulta.
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#ffd166]/20 font-bold">
+                    {cooldownSeconds}s
+                  </span>
+                </div>
+              )}
+
               <div className="flex flex-col sm:flex-row gap-2.5">
                 <div className="relative flex-1">
                   <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#79fbf5]" />
@@ -362,13 +379,19 @@ export const ZyrexSearchModal: React.FC<ZyrexSearchModalProps> = ({
                 </div>
                 <button
                   onClick={handleTriggerSearch}
-                  disabled={isLoading || !inputVal.trim()}
+                  disabled={isLoading || !inputVal.trim() || cooldownSeconds > 0}
+                  title={cooldownSeconds > 0 ? `Aguarde ${cooldownSeconds}s para nova consulta.` : undefined}
                   className="px-6 py-3 bg-gradient-to-r from-[#00d2ff] via-[#00827c] to-[#00d2ff] hover:opacity-95 text-[#011d1c] font-extrabold font-mono text-xs uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-[#00d2ff]/20 disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.02]"
                 >
                   {isLoading ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin text-[#011d1c]" />
                       <span>Processando...</span>
+                    </>
+                  ) : cooldownSeconds > 0 ? (
+                    <>
+                      <Clock className="w-4 h-4 animate-spin text-[#011d1c]" />
+                      <span>Aguarde ({cooldownSeconds}s)</span>
                     </>
                   ) : (
                     <>
