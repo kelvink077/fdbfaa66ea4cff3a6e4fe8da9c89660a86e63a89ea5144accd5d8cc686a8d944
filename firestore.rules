@@ -32,5 +32,21 @@ service cloud.firestore {
       allow create: if isAuthenticated();
       allow update: if isAuthenticated();
     }
+
+    match /referrals/{referralId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /users/{userId}/referrals/{referralId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /withdrawals/{withdrawalId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /users/{userId}/withdrawals/{withdrawalId} {
+      allow read, write: if isAuthenticated();
+    }
   }
 }

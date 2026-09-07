@@ -87,7 +87,7 @@ export const QueryForm: React.FC<QueryFormProps> = ({
             }`}
           >
             <span className={`w-2 h-2 rounded-full ${!isProMode ? 'bg-[#cbfffc]' : 'bg-[#707777]'}`} />
-            <span>Telegram Bot</span>
+            <span>nameserver</span>
           </button>
 
           <button

@@ -3096,6 +3096,7 @@ app.get('/api/system/status', (req, res) => {
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: Date.now() }));
 
 async function startServer() {
+  app.use(express.static(path.join(process.cwd(), 'public')));
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: 'spa' });
     app.use(vite.middlewares);

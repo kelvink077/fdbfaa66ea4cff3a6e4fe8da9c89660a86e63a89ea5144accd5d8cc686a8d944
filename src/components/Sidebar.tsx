@@ -12,6 +12,7 @@ interface SidebarProps {
   selectedModule: QueryModuleType;
   onSelectModule: (module: QueryModuleType) => void;
   pendingCountByModule?: Record<string, number>;
+  onOpenResellerPortal?: () => void;
   className?: string;
 }
 
@@ -19,6 +20,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   selectedModule,
   onSelectModule,
   pendingCountByModule = {},
+  onOpenResellerPortal,
   className = '',
 }) => {
   const cpfModules = QUERY_MODULES.filter((m) => m.id.startsWith('cpf'));

@@ -9,10 +9,13 @@ import {
   X, 
   Sparkles, 
   AlertCircle, 
+  AlertTriangle,
   Zap, 
   Crown,
   Calendar,
-  ArrowRight
+  ArrowRight,
+  Shield,
+  FileCheck
 } from 'lucide-react';
 import type { User as FirebaseUser } from 'firebase/auth';
 import type { UserProfileData } from '../lib/firebase';
@@ -68,6 +71,9 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [copied, setCopied] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [termsError, setTermsError] = useState('');
+  const [showTermsModal, setShowTermsModal] = useState(false);
 
   // PIX Data returned by UP DEPIX
   const [depositId, setDepositId] = useState<string | null>(null);
@@ -91,6 +97,9 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
       setQrImageUrl('');
       setIsLoading(false);
       setCopied(false);
+      setTermsAccepted(false);
+      setTermsError('');
+      setShowTermsModal(false);
       setCreditedProfile(null);
       if (currentUser?.displayName) {
         setPayerName(currentUser.displayName);
@@ -145,6 +154,11 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
     const cleanDoc = payerDocument.replace(/\D/g, '');
     if (cleanDoc.length !== 11 && cleanDoc.length !== 14) {
       setDocError('Informe um CPF (11 dígitos) ou CNPJ (14 dígitos) válido para compliance do PIX.');
+      return;
+    }
+
+    if (!termsAccepted) {
+      setTermsError('É obrigatório clicar em "ACEITAR TERMOS" para confirmar que a conta pagadora possui o mesmo CPF/CNPJ.');
       return;
     }
 
@@ -393,24 +407,97 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
                 )}
               </div>
 
-              <div className="pt-2">
+              {/* Termos de Identificação do Pagador (Estilo idêntico ao alerta vermelho da imagem) */}
+              <div className={`p-3.5 rounded-[10px] border transition-all ${
+                termsAccepted 
+                  ? 'bg-[#002b28] border-emerald-500/60' 
+                  : termsError 
+                    ? 'bg-[#2a1013] border-rose-500/80 ring-1 ring-rose-500/60' 
+                    : 'bg-[#221013]/95 border border-rose-500/40'
+              }`}>
+                <div className="flex items-start gap-2.5">
+                  <AlertTriangle className={`w-4 h-4 shrink-0 mt-0.5 ${termsAccepted ? 'text-emerald-400' : 'text-rose-400'}`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <strong className={`text-xs font-mono font-bold uppercase tracking-wider ${termsAccepted ? 'text-emerald-300' : 'text-rose-300'}`}>
+                        Termos de Identificação do Pagador
+                      </strong>
+                      {termsAccepted && (
+                        <span className="px-2 py-0.5 rounded-[4px] bg-emerald-500/20 text-emerald-300 text-[10px] font-mono font-bold">
+                          TERMOS ACEITOS
+                        </span>
+                      )}
+                    </div>
+
+                    <p className={`text-[11px] leading-relaxed ${termsAccepted ? 'text-[#edfffe]' : 'text-rose-200/95'}`}>
+                      Por medidas de segurança da <strong>rede DEPIX</strong>, é necessário informar o CPF ou CNPJ do titular pagador. 
+                      <span className="font-semibold text-[#ffffff]"> Caso o cliente não digitar o CPF ou CNPJ da conta que está efetuando o pagamento PIX de maneira correta, o valor será estornado e o pagamento não será creditado.</span>
+                    </p>
+
+                    <div className="mt-3 flex flex-wrap items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = !termsAccepted;
+                          setTermsAccepted(next);
+                          if (next) setTermsError('');
+                        }}
+                        className={`px-4 py-2 rounded-[8px] text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-2 shadow-md ${
+                          termsAccepted
+                            ? 'bg-emerald-600 hover:bg-emerald-500 text-[#ffffff]'
+                            : 'bg-rose-600 hover:bg-rose-500 text-[#ffffff] hover:scale-[1.02] shadow-rose-950/60'
+                        }`}
+                      >
+                        <Check className="w-4 h-4 stroke-[3]" />
+                        <span>{termsAccepted ? 'TERMOS ACEITOS ✓' : 'ACEITAR TERMOS'}</span>
+                      </button>
+
+                      <span className={`text-[10px] font-mono ${termsAccepted ? 'text-emerald-300/80' : 'text-rose-300/80'}`}>
+                        {termsAccepted ? '✓ Declaração confirmada' : '* Clique para aceitar antes de pagar'}
+                      </span>
+                    </div>
+
+                    {termsError && (
+                      <p className="text-[11px] text-rose-300 mt-2 font-mono flex items-center gap-1.5 font-bold">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        <span>{termsError}</span>
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Botão de Pagar estilizado em destaque Laranja/Amber (conforme layout) */}
+              <div className="pt-1">
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full py-3.5 px-4 rounded-[8px] bg-gradient-to-r from-[#00827c] to-[#00a8a0] hover:opacity-95 text-[#011d1c] font-bold text-xs font-mono uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-[#00827c]/20 hover:scale-[1.01] disabled:opacity-50"
+                  className="w-full py-3.5 px-4 rounded-[10px] bg-gradient-to-r from-[#f97316] to-[#ea580c] hover:from-[#fb923c] hover:to-[#f97316] text-[#ffffff] font-bold text-sm font-['DM_Sans',sans-serif] tracking-wide transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-orange-950/40 hover:scale-[1.01] disabled:opacity-50"
                 >
                   {isLoading ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin text-[#011d1c]" />
+                      <Loader2 className="w-4 h-4 animate-spin text-[#ffffff]" />
                       <span>Gerando QR Code na UP DEPIX...</span>
                     </>
                   ) : (
                     <>
                       <QrCode className="w-4 h-4" />
-                      <span>Gerar PIX para Pagamento (R$ {plan.price})</span>
+                      <span>Pagar R$ {plan.price}</span>
+                      <ArrowRight className="w-4 h-4" />
                     </>
                   )}
                 </button>
+              </div>
+
+              {/* Box 3: Pagamento 100% Seguro (conforme layout da imagem) */}
+              <div className="p-3 rounded-[10px] bg-[#022c22]/50 border border-emerald-500/40 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-[#ffffff]">Pagamento 100% Seguro</div>
+                  <div className="text-[11px] text-emerald-400/90 font-mono">Processado pelo UPDEPIX via PIX</div>
+                </div>
               </div>
             </form>
 
@@ -449,6 +536,14 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
                   <QrCode className="w-32 h-32 text-[#012624]" />
                 </div>
               )}
+            </div>
+
+            {/* Aviso de titularidade do QR code */}
+            <div className="mb-4 p-2.5 rounded-[8px] bg-[#002422] border border-[#00827c]/40 text-[11px] text-[#edfffe] flex items-center justify-center gap-2">
+              <Shield className="w-3.5 h-3.5 text-[#ffd166] shrink-0" />
+              <span>
+                Conta pagadora obrigatória: <strong className="text-[#ffd166] font-mono">{payerDocument}</strong>
+              </span>
             </div>
 
             {/* Copy-and-Paste Code */}

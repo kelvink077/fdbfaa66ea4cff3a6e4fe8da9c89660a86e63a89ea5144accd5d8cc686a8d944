@@ -340,6 +340,14 @@ export async function creditUserPlanValidity(
       console.warn('[Firestore] Log de pagamento complementar não gravado:', payErr);
     }
 
+    // Libera a comissão de 15% para o revendedor responsável caso o usuário tenha sido indicado
+    try {
+      const { markReferralAsPaid } = await import('./resellerService');
+      await markReferralAsPaid(userId, planId, paymentInfo.amount, paymentInfo.payerDocument);
+    } catch (refErr) {
+      console.warn('[Referral] Erro ao creditar comissão do revendedor:', refErr);
+    }
+
     return updatedProfile;
   } catch (err) {
     console.error('[Firebase] Erro ao creditar validade do usuário:', err);

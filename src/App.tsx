@@ -14,6 +14,7 @@ import { PricingModal } from './components/PricingModal';
 import { UserProfileModal } from './components/UserProfileModal';
 import { PixCheckoutModal } from './components/PixCheckoutModal';
 import { SaaSLandingLoginPage } from './components/SaaSLandingLoginPage';
+import { captureReferralCodeFromUrl, trackNewUserReferral } from './lib/resellerService';
 import { AuthErrorModal, AuthErrorDetails } from './components/AuthErrorModal';
 import { ProSearchModal } from './components/ProSearchModal';
 import { ZyrexSearchModal } from './components/ZyrexSearchModal';
@@ -130,6 +131,11 @@ export default function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProMode, setIsProMode] = useState(false);
   const [selectedPlanForPix, setSelectedPlanForPix] = useState<'weekly' | 'biweekly' | 'monthly'>('monthly');
+
+  // Captura código de indicação do revendedor na URL (?ref=CODIGO) ao carregar
+  useEffect(() => {
+    captureReferralCodeFromUrl();
+  }, []);
 
   // Controle de erros de autenticação OAuth (ex: domínio não autorizado no Netlify)
   const [authError, setAuthError] = useState<AuthErrorDetails | null>(null);
@@ -578,6 +584,14 @@ export default function App() {
       currentUserRef.current = user;
       setUserProfile(profile);
       console.log('[Firebase] Login realizado com sucesso via Google:', user.displayName || user.email, 'Plano:', profile.plan);
+
+      // Se o usuário entrou por link de indicação de um revendedor (?ref=...), registra a indicação
+      const activeRef = captureReferralCodeFromUrl();
+      if (activeRef && user) {
+        trackNewUserReferral(activeRef, user).catch((refErr) => {
+          console.warn('[Referral] Erro ao registrar indicação:', refErr);
+        });
+      }
     } catch (err: any) {
       console.error('[Firebase] Erro ao autenticar via Google:', err);
       const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'dapper-seahorse-f49b35.netlify.app';

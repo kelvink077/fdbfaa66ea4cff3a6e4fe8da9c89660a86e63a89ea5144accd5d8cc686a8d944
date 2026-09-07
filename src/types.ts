@@ -127,3 +127,50 @@ export interface SystemStats {
   pendingQueries: number;
   avgResponseTimeMs: number;
 }
+
+export interface ReferralLead {
+  id: string;
+  resellerId: string;
+  resellerCode: string;
+  referredUserId?: string;
+  referredName: string;
+  referredEmail: string;
+  referredPhotoURL?: string;
+  planId: 'weekly' | 'biweekly' | 'monthly' | 'trial' | string;
+  planName: string;
+  planAmount: number;
+  commissionPercent: number; // 15
+  commissionAmount: number; // 15% do valor do plano contratado
+  status: 'pending' | 'paid'; // 'pending' = apenas cadastrado/teste grátis (renda estimada); 'paid' = pagamento efetuado (comissão liberada)
+  createdAt: string;
+  paidAt?: string;
+  depositId?: string;
+}
+
+export interface WithdrawalOrder {
+  id: string;
+  resellerId: string;
+  resellerEmail: string;
+  resellerName: string;
+  amount: number;
+  pixKeyType: 'cpf' | 'cnpj' | 'email' | 'phone' | 'random';
+  pixKey: string;
+  accountHolder: string;
+  status: 'pending' | 'processing' | 'completed' | 'rejected';
+  createdAt: string;
+  processedAt?: string;
+  estimatedPaymentHours: number; // 24h prazo médio
+  notes?: string;
+}
+
+export interface ResellerWallet {
+  resellerId: string;
+  resellerCode: string;
+  availableBalance: number; // Liberado apenas se o indicado pagou o plano contratado (15%)
+  estimatedPendingBalance: number; // Renda estimada de indicações cadastradas ainda não pagas
+  totalWithdrawn: number; // Total já pago via PIX
+  totalReferralsCount: number;
+  paidReferralsCount: number;
+  pendingReferralsCount: number;
+  updatedAt: string;
+}

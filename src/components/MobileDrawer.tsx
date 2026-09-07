@@ -26,6 +26,7 @@ interface MobileDrawerProps {
   pendingCountByModule?: Record<string, number>;
   onOpenProModal?: () => void;
   onOpenKrexModal?: () => void;
+  onOpenResellerPortal?: () => void;
 }
 
 export const MobileDrawer: React.FC<MobileDrawerProps> = ({
@@ -36,6 +37,7 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
   pendingCountByModule = {},
   onOpenProModal,
   onOpenKrexModal,
+  onOpenResellerPortal,
 }) => {
   // Close on ESC
   useEffect(() => {
@@ -133,34 +135,36 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
         </div>
 
         {/* Quick VIP Actions */}
-        <div className="p-3 border-b border-[#003734] grid grid-cols-2 gap-2 bg-[#011d1c]">
-          {onOpenProModal && (
-            <button
-              type="button"
-              onClick={() => {
-                onOpenProModal();
-                onClose();
-              }}
-              className="flex items-center justify-center gap-1.5 p-2 rounded-[8px] bg-gradient-to-r from-[#ffd166] to-[#f59e0b] text-[#0f172a] font-bold text-xs shadow-md border border-[#fef08a]"
-            >
-              <Sparkles className="w-3.5 h-3.5 fill-[#0f172a]" />
-              <span>BUSCAS PRO</span>
-            </button>
-          )}
+        <div className="p-3 border-b border-[#003734] space-y-2 bg-[#011d1c]">
+          <div className="grid grid-cols-2 gap-2">
+            {onOpenProModal && (
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenProModal();
+                  onClose();
+                }}
+                className="flex items-center justify-center gap-1.5 p-2 rounded-[8px] bg-gradient-to-r from-[#ffd166] to-[#f59e0b] text-[#0f172a] font-bold text-xs shadow-md border border-[#fef08a]"
+              >
+                <Sparkles className="w-3.5 h-3.5 fill-[#0f172a]" />
+                <span>BUSCAS PRO</span>
+              </button>
+            )}
 
-          {onOpenKrexModal && (
-            <button
-              type="button"
-              onClick={() => {
-                onOpenKrexModal();
-                onClose();
-              }}
-              className="flex items-center justify-center gap-1.5 p-2 rounded-[8px] bg-gradient-to-r from-[#00d2ff] to-[#00827c] text-[#011d1c] font-bold text-xs shadow-md border border-[#79fbf5]"
-            >
-              <Zap className="w-3.5 h-3.5 fill-[#011d1c]" />
-              <span>BUSCAS KREX</span>
-            </button>
-          )}
+            {onOpenKrexModal && (
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenKrexModal();
+                  onClose();
+                }}
+                className="flex items-center justify-center gap-1.5 p-2 rounded-[8px] bg-gradient-to-r from-[#00d2ff] to-[#00827c] text-[#011d1c] font-bold text-xs shadow-md border border-[#79fbf5]"
+              >
+                <Zap className="w-3.5 h-3.5 fill-[#011d1c]" />
+                <span>BUSCAS KREX</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Module lists */}

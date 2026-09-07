@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Crown, 
   Sparkles, 
@@ -6,28 +6,25 @@ import {
   ArrowRight, 
   ShieldCheck, 
   Zap, 
-  Car, 
-  FileText, 
-  Phone, 
-  Clock, 
-  Terminal, 
   Star, 
   ChevronRight,
-  Database,
-  Lock,
   Loader2,
-  Users,
-  Search,
-  Building,
+  Lock,
   Activity,
   CheckCircle2,
   AlertTriangle,
-  HelpCircle,
+  FileDown,
+  Layers,
+  Search,
   ExternalLink
 } from 'lucide-react';
 import { PRICING_PLANS } from './PricingModal';
 import { ShazamLogo } from './ShazamLogo';
 import type { AuthErrorDetails } from './AuthErrorModal';
+import { HeroVisualCards } from './landing/HeroVisualCards';
+import { HowItWorksSection } from './landing/HowItWorksSection';
+import { ModulesFilterSection } from './landing/ModulesFilterSection';
+import { FaqAccordionSection } from './landing/FaqAccordionSection';
 
 interface SaaSLandingLoginPageProps {
   onLoginGoogle: () => void;
@@ -44,151 +41,226 @@ export const SaaSLandingLoginPage: React.FC<SaaSLandingLoginPageProps> = ({
   onOpenAuthHelp,
   onContinueAsGuest,
 }) => {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   return (
-    <div className="min-h-screen bg-[#012624] text-[#bbc7c6] flex flex-col font-['DM_Sans',sans-serif] selection:bg-[#00827c]/40 selection:text-[#edfffe]">
-      {/* 1. Top Announcement Bar */}
-      <div className="bg-gradient-to-r from-[#003431] via-[#014743] to-[#003431] border-b border-[#00827c]/40 px-4 py-2.5 text-center text-xs text-[#edfffe]">
-        <div className="max-w-7xl mx-auto flex items-center justify-center gap-2 flex-wrap">
-          <span className="px-2 py-0.5 rounded-[4px] bg-[#ffd166]/20 border border-[#ffd166]/40 text-[#ffd166] text-[10px] font-mono font-medium tracking-wider uppercase flex items-center gap-1">
-            <Crown className="w-3 h-3 text-[#ffd166]" />
-            NOVO CLIENTE
-          </span>
-          <span>
-            Cadastre-se com o Google e ganhe o <strong className="text-[#ffd166]">Plano Premium</strong> com <strong className="text-[#cbfffc] underline decoration-[#00827c]">teste gratuito de 24 horas</strong>!
-          </span>
-          <button
-            onClick={onLoginGoogle}
-            disabled={isAuthLoading}
-            className="ml-2 text-[#cbfffc] hover:text-[#ffffff] font-medium underline flex items-center gap-1 cursor-pointer"
-          >
-            <span>Ativar Teste 24h</span>
-            <ChevronRight className="w-3 h-3" />
-          </button>
+    <div className="min-h-screen bg-[#011d1c] text-[#bbc7c6] flex flex-col font-['DM_Sans',sans-serif] selection:bg-[#00827c]/40 selection:text-[#edfffe]">
+      {/* 1. TOP ANNOUNCEMENT BAR */}
+      <div className="bg-[#001413] border-b border-[#003734] text-white text-xs">
+        <div className="max-w-6xl mx-auto px-6 py-2.5 flex items-center justify-between gap-4">
+          <p className="flex items-center gap-2 text-[11px] sm:text-xs">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#cbfffc] animate-pulse"></span>
+            <span className="hidden sm:inline">
+              Pagamento <strong className="text-[#cbfffc]">somente via PIX</strong> • ativação instantânea • sem renovação automática • <strong className="text-[#ffd166]">teste grátis de 24h</strong>
+            </span>
+            <span className="sm:hidden">
+              Pagamento via PIX • ativação na hora • teste 24h grátis
+            </span>
+          </p>
+          <a href="#modulos" className="hidden md:inline-flex items-center gap-1.5 text-[#cbfffc] hover:text-[#ffffff] transition text-xs font-mono">
+            Ver 37 módulos <span>→</span>
+          </a>
         </div>
       </div>
 
-      {/* 2. Main Navigation Header */}
-      <header className="h-20 border-b border-[#003734] px-6 lg:px-12 flex items-center justify-between bg-[#012624]/90 backdrop-blur-md sticky top-0 z-30">
-        <div className="flex items-center gap-3">
-          <ShazamLogo size="md" isPulseSpeedFast={isAuthLoading} />
-          <div className="flex flex-col">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-lg tracking-tight text-[#ffffff] uppercase font-['DM_Sans',sans-serif]">
-                SHAZAM <span className="bg-gradient-to-r from-[#cbfffc] to-[#79fbf5] bg-clip-text text-transparent font-bold">BUSCAS</span>
+      {/* 2. MAIN NAVIGATION HEADER */}
+      <header className="sticky top-0 z-40 bg-[#012624]/95 border-b border-[#003734] backdrop-blur-md">
+        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between gap-6">
+          {/* Brand */}
+          <a href="#" className="flex items-center gap-3">
+            <ShazamLogo size="md" isPulseSpeedFast={isAuthLoading} />
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-lg tracking-tight text-[#ffffff] uppercase font-['DM_Sans',sans-serif]">
+                  SHAZAM <span className="bg-gradient-to-r from-[#cbfffc] to-[#79fbf5] bg-clip-text text-transparent font-bold">BUSCAS</span>
+                </span>
+                <span className="text-[9px] uppercase tracking-[0.15em] px-2 py-0.5 rounded-[4px] bg-[#003734] text-[#cbfffc] border border-[#00827c]/40 font-mono font-medium">
+                  B2B OFICIAL
+                </span>
+              </div>
+              <span className="text-[10px] uppercase tracking-[0.12em] text-[#bbc7c6]/70">
+                Inteligência Cadastral & Investigativa
               </span>
-              <span className="text-[10px] uppercase tracking-[0.15em] px-2 py-0.5 rounded-[4px] bg-[#003734] text-[#cbfffc] border border-[#00827c]/40 font-mono font-medium">
-                B2B OFICIAL
-              </span>
             </div>
-            <span className="text-[10px] uppercase tracking-[0.12em] text-[#bbc7c6]">
-              Inteligência Cadastral & Investigativa
-            </span>
-          </div>
-        </div>
+          </a>
 
-        {/* Right Nav Auth Action */}
-        <div className="flex items-center gap-3">
-          <button
-            id="btn-landing-login-header"
-            onClick={onLoginGoogle}
-            disabled={isAuthLoading}
-            className="flex items-center gap-2 px-4 py-2 rounded-[6px] bg-gradient-to-r from-[#00827c] to-[#00a8a0] hover:opacity-95 text-[#011d1c] font-medium text-xs font-mono uppercase tracking-[0.08em] transition-all cursor-pointer shadow-sm hover:scale-[1.02]"
-          >
-            {isAuthLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin text-[#011d1c]" />
-            ) : (
-              <svg className="w-4 h-4" viewBox="0 0 24 24">
-                <path
-                  fill="#011d1c"
-                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                />
-                <path
-                  fill="#011d1c"
-                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                />
-                <path
-                  fill="#011d1c"
-                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                />
-                <path
-                  fill="#011d1c"
-                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                />
-              </svg>
-            )}
-            <span>Entrar com Google</span>
-          </button>
-        </div>
-      </header>
+          {/* Desktop Nav Links */}
+          <nav className="hidden lg:flex items-center gap-1 text-xs font-mono uppercase tracking-wider text-[#bbc7c6]">
+            <a href="#como" className="px-3 py-2 rounded-md hover:text-[#cbfffc] transition">Como Funciona</a>
+            <a href="#planos" className="px-3 py-2 rounded-md hover:text-[#cbfffc] transition">Planos</a>
+          </nav>
 
-      {/* 3. Hero Section with Dynamic Animated Logo */}
-      <section className="relative px-6 lg:px-12 pt-14 pb-20 overflow-hidden border-b border-[#003734]">
-        {/* Glow ambient background */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[380px] bg-[#00827c]/20 blur-[130px] pointer-events-none rounded-full"></div>
-
-        <div className="max-w-5xl mx-auto text-center space-y-7 relative z-10">
-          {/* Dynamic Animated Shazam Logo Hero Centerpiece */}
-          <div className="flex flex-col items-center justify-center gap-3">
-            <div className="p-3.5 rounded-2xl bg-[#002f2c]/80 border border-[#00827c]/50 shadow-[0_0_40px_rgba(0,130,124,0.35)] backdrop-blur-sm">
-              <ShazamLogo size="xl" isPulseSpeedFast={isAuthLoading} />
-            </div>
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#003734] border border-[#00827c]/60 text-[#cbfffc] text-xs font-mono tracking-wide shadow-sm mt-2">
-              <ShieldCheck className="w-3.5 h-3.5 text-[#cbfffc]" />
-              <span>SHAZAM BUSCAS • ACESSO RESTRITO A OPERADORES AUTORIZADOS</span>
-            </div>
-          </div>
-
-          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-medium text-[#ffffff] tracking-tight leading-[1.15]">
-            Inteligência Cadastral <br />
-            <span className="bg-gradient-to-r from-[#cbfffc] via-[#85fff7] to-[#ffd166] bg-clip-text text-transparent">
-              e Dossiês em Tempo Real
-            </span>
-          </h1>
-
-          <p className="text-base sm:text-lg text-[#bbc7c6] max-w-3xl mx-auto leading-relaxed">
-            Acesse a central de busca e validação investigativa <strong className="text-[#ffffff]">Shazam Buscas</strong>. 
-            Dossiês completos de veículos, pessoas físicas, CNPJ e localização com criptografia ponta a ponta. 
-            O sistema exige autenticação corporativa segura e disponibiliza <strong className="text-[#ffd166]">teste gratuito de 24 horas</strong> com acesso liberado ao entrar com o Google.
-          </p>
-
-          {/* Direct CTA Box (Authentication required to enter system) */}
-          <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-4">
+          {/* Desktop CTA */}
+          <div className="hidden lg:flex items-center gap-3">
             <button
-              id="btn-hero-google-login"
               onClick={onLoginGoogle}
               disabled={isAuthLoading}
-              className="w-full sm:w-auto flex items-center justify-center gap-3 px-8 py-4 rounded-[10px] bg-gradient-to-r from-[#cbfffc] to-[#79fbf5] hover:opacity-95 text-[#012624] font-semibold text-sm uppercase tracking-wider font-mono transition-all cursor-pointer shadow-[0_0_30px_rgba(203,255,252,0.25)] hover:scale-[1.02]"
+              className="flex items-center gap-2 px-4 py-2 rounded-[8px] bg-gradient-to-r from-[#00827c] to-[#00a8a0] hover:opacity-95 text-[#011d1c] font-bold text-xs font-mono uppercase tracking-wider transition-all cursor-pointer shadow-md hover:scale-[1.02]"
             >
               {isAuthLoading ? (
-                <Loader2 className="w-5 h-5 animate-spin text-[#012624]" />
+                <Loader2 className="w-4 h-4 animate-spin text-[#011d1c]" />
               ) : (
-                <svg className="w-5 h-5" viewBox="0 0 24 24">
+                <svg className="w-4 h-4" viewBox="0 0 24 24">
                   <path
-                    fill="#012624"
+                    fill="#011d1c"
                     d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
                   />
                   <path
-                    fill="#012624"
+                    fill="#011d1c"
                     d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
                   />
                   <path
-                    fill="#012624"
+                    fill="#011d1c"
                     d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
                   />
                   <path
-                    fill="#012624"
+                    fill="#011d1c"
                     d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
                   />
                 </svg>
               )}
-              <span>Entrar com Google & Ativar Teste Grátis de 24h</span>
-              <ArrowRight className="w-4 h-4" />
+              <span>Entrar com Google</span>
             </button>
           </div>
 
-          {/* Diagnostic Banner if Google Auth popup closes due to unauthorized domain */}
+          {/* Mobile Menu Button */}
+          <div className="flex lg:hidden items-center gap-2">
+            <button
+              onClick={onLoginGoogle}
+              disabled={isAuthLoading}
+              className="px-3 py-1.5 rounded-[6px] bg-[#00827c] text-[#011d1c] font-bold text-xs font-mono uppercase"
+            >
+              Entrar
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="w-9 h-9 rounded-md border border-[#003734] flex items-center justify-center text-[#bbc7c6] hover:text-[#cbfffc]"
+              aria-label="Abrir Menu"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="12" cy="5" r="2" />
+                <circle cx="12" cy="12" r="2" />
+                <circle cx="12" cy="19" r="2" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Mobile Menu Dropdown */}
+        {mobileMenuOpen && (
+          <div className="lg:hidden border-t border-[#003734] bg-[#011d1c] px-6 py-4 flex flex-col gap-3 font-mono text-xs uppercase tracking-wider">
+            <a href="#como" onClick={() => setMobileMenuOpen(false)} className="py-2 border-b border-[#003734]/60 hover:text-[#cbfffc]">Como Funciona</a>
+            <a href="#planos" onClick={() => setMobileMenuOpen(false)} className="py-2 hover:text-[#cbfffc]">Planos</a>
+          </div>
+        )}
+      </header>
+
+      {/* 3. HERO SECTION WITH VISUAL FLOATING CARDS */}
+      <section className="relative px-6 lg:px-12 pt-12 pb-20 overflow-hidden border-b border-[#003734]">
+        {/* Glow ambient background */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[450px] bg-[#00827c]/15 blur-[150px] pointer-events-none rounded-full"></div>
+
+        <div className="max-w-6xl mx-auto">
+          <div className="grid lg:grid-cols-12 gap-12 items-center">
+            {/* Left Content */}
+            <div className="lg:col-span-7 space-y-6 relative z-10 text-left">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#003734] border border-[#00827c]/60 text-[#cbfffc] text-xs font-mono tracking-wide">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#cbfffc] animate-pulse"></span>
+                <span>37 MÓDULOS DE CONSULTA • COBERTURA NACIONAL</span>
+              </div>
+
+              <h1 className="text-3xl sm:text-5xl lg:text-6xl font-medium text-[#ffffff] tracking-tight leading-[1.08]">
+                A plataforma de <br />
+                <span className="bg-gradient-to-r from-[#cbfffc] via-[#85fff7] to-[#ffd166] bg-clip-text text-transparent">
+                  investigação e dossiês
+                </span><br />
+                dos profissionais que não erram.
+              </h1>
+
+              <p className="text-base sm:text-lg text-[#bbc7c6] leading-relaxed max-w-xl">
+                CPF, placa, CNPJ, telefone, e-mail, parentes, score, radar de passagens. 
+                <strong className="text-[#ffffff]"> Tudo em um só painel</strong> com fontes cruzadas e criptografia ponta a ponta. 
+                Entre com o Google e ganhe <strong className="text-[#ffd166]">teste grátis de 24 horas</strong>.
+              </p>
+
+              {/* CTAs */}
+              <div className="pt-2 flex flex-wrap items-center gap-4">
+                <button
+                  id="btn-hero-google-login"
+                  onClick={onLoginGoogle}
+                  disabled={isAuthLoading}
+                  className="flex items-center justify-center gap-2.5 px-7 py-3.5 rounded-[10px] bg-gradient-to-r from-[#cbfffc] to-[#79fbf5] hover:opacity-95 text-[#012624] font-bold text-xs font-mono uppercase tracking-wider transition-all cursor-pointer shadow-[0_0_30px_rgba(203,255,252,0.25)] hover:scale-[1.02]"
+                >
+                  {isAuthLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-[#012624]" />
+                  ) : (
+                    <svg className="w-4 h-4" viewBox="0 0 24 24">
+                      <path
+                        fill="#012624"
+                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                      />
+                      <path
+                        fill="#012624"
+                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                      />
+                      <path
+                        fill="#012624"
+                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                      />
+                      <path
+                        fill="#012624"
+                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                      />
+                    </svg>
+                  )}
+                  <span>Começar Agora & Ativar Teste 24h</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="text-xs text-[#bbc7c6]/70 font-mono">
+                ▸ Sem cartão de crédito • Pagamento 100% via PIX • Sem renovação automática
+              </div>
+
+              {/* Stats Row */}
+              <div className="pt-6 grid grid-cols-3 gap-6 max-w-lg border-t border-[#003734]">
+                <div>
+                  <div className="text-3xl lg:text-4xl font-mono font-bold text-[#ffffff]">
+                    37
+                  </div>
+                  <div className="text-[10px] uppercase font-mono tracking-wider text-[#bbc7c6]/70 mt-1">
+                    Módulos Ativos
+                  </div>
+                </div>
+                <div className="border-l border-[#003734] pl-6">
+                  <div className="text-3xl lg:text-4xl font-mono font-bold text-[#cbfffc]">
+                    2-4<span className="text-xs font-normal">s</span>
+                  </div>
+                  <div className="text-[10px] uppercase font-mono tracking-wider text-[#bbc7c6]/70 mt-1">
+                    Tempo por Consulta
+                  </div>
+                </div>
+                <div className="border-l border-[#003734] pl-6">
+                  <div className="text-3xl lg:text-4xl font-mono font-bold text-emerald-400">
+                    100<span className="text-xs font-normal">%</span>
+                  </div>
+                  <div className="text-[10px] uppercase font-mono tracking-wider text-[#bbc7c6]/70 mt-1">
+                    Disponibilidade
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Visual Floating Showcase Cards */}
+            <div className="lg:col-span-5 relative">
+              <HeroVisualCards />
+            </div>
+          </div>
+
+          {/* Diagnostic Banner if Google Auth popup closes */}
           {authError && (
-            <div className="w-full max-w-xl mx-auto p-4 rounded-[12px] bg-amber-950/40 border border-amber-500/50 text-left space-y-2">
+            <div className="w-full max-w-2xl mx-auto mt-8 p-4 rounded-[12px] bg-amber-950/40 border border-amber-500/50 text-left space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-1.5 text-xs font-mono font-bold text-amber-300">
                   <AlertTriangle className="w-4 h-4 text-amber-300 shrink-0" />
@@ -229,37 +301,29 @@ export const SaaSLandingLoginPage: React.FC<SaaSLandingLoginPageProps> = ({
               </div>
             </div>
           )}
-
-          <div className="flex flex-wrap items-center justify-center gap-6 text-xs text-[#bbc7c6] font-mono pt-2">
-            <span className="flex items-center gap-1.5 text-[#cbfffc]">
-              <Lock className="w-3.5 h-3.5 text-[#cbfffc]" />
-              Autenticação Obrigatória
-            </span>
-            <span className="flex items-center gap-1.5 text-[#cbfffc]">
-              <CheckCircle2 className="w-3.5 h-3.5 text-[#cbfffc]" />
-              Sem Cartão de Crédito
-            </span>
-            <span className="flex items-center gap-1.5 text-[#cbfffc]">
-              <Activity className="w-3.5 h-3.5 text-[#cbfffc]" />
-              Sincronização em Tempo Real
-            </span>
-          </div>
         </div>
       </section>
 
-      {/* 4. Pricing Section (Semanal R$ 11, 15 Dias R$ 19,90, Mensal R$ 35) */}
-      <section id="planos" className="px-6 lg:px-12 py-20 bg-[#01201e] border-b border-[#003734]">
+      {/* 4. COMO FUNCIONA (3 ETAPAS COM MOCKUPS) */}
+      <HowItWorksSection />
+
+      {/* 5. MÓDULOS DE CONSULTA COM ABAS FILTRÁVEIS */}
+      <ModulesFilterSection onSelectModule={onLoginGoogle} />
+
+      {/* 8. TABELA DE PLANOS OFICIAIS */}
+      <section id="planos" className="px-6 lg:px-12 py-20 bg-[#011d1c] border-b border-[#003734]">
         <div className="max-w-6xl mx-auto space-y-12">
           <div className="text-center space-y-3">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#ffd166]/15 border border-[#ffd166]/40 text-[#ffd166] text-xs font-mono font-medium tracking-wide">
               <Crown className="w-3.5 h-3.5 text-[#ffd166]" />
               <span>TABELA OFICIAL DE ASSINATURA SHAZAM BUSCAS</span>
             </div>
-            <h2 className="text-3xl sm:text-4xl font-medium text-[#ffffff] tracking-tight">
+            <h2 className="text-3xl sm:text-5xl font-medium text-[#ffffff] tracking-tight leading-[1.1]">
               Planos Transparentes e Acessíveis
             </h2>
             <p className="text-sm text-[#bbc7c6] max-w-2xl mx-auto">
-              Selecione o plano ideal para suas operações. Todos contam com o período de teste gratuito de 24 horas liberado imediatamente ao autenticar com o Google.
+              Pagamento <strong className="text-[#ffffff]">somente via PIX</strong>. Ativação na hora. 
+              <strong className="text-[#ffd166]"> Sem renovação automática</strong> nem surpresa na fatura.
             </p>
           </div>
 
@@ -275,7 +339,7 @@ export const SaaSLandingLoginPage: React.FC<SaaSLandingLoginPageProps> = ({
                 }`}
               >
                 {plan.highlight && (
-                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-[#ffd166] text-[#012624] text-[11px] font-mono font-bold uppercase tracking-wider shadow-sm flex items-center gap-1.5">
+                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-[#ffd166] text-[#012624] text-[11px] font-mono font-bold uppercase tracking-wider shadow-sm flex items-center gap-1.5 whitespace-nowrap">
                     <Star className="w-3.5 h-3.5 fill-current" />
                     <span>MAIS POPULAR • MELHOR ESCOLHA</span>
                   </div>
@@ -306,12 +370,12 @@ export const SaaSLandingLoginPage: React.FC<SaaSLandingLoginPageProps> = ({
                         {plan.price}
                       </span>
                       <span className="text-xs text-[#bbc7c6] font-mono">
-                        / {plan.period}
+                        / {plan.period} • PIX único
                       </span>
                     </div>
                     <div className="mt-1 flex items-center gap-2 text-[11px] text-[#707777]">
                       <span className="line-through">De R$ {plan.originalPrice}</span>
-                      <span className="text-[#cbfffc] font-mono font-medium">Teste 24h grátis</span>
+                      <span className="text-[#cbfffc] font-mono font-medium">Teste 24h grátis incluso</span>
                     </div>
                   </div>
 
@@ -339,12 +403,12 @@ export const SaaSLandingLoginPage: React.FC<SaaSLandingLoginPageProps> = ({
                     }`}
                   >
                     <Crown className="w-3.5 h-3.5" />
-                    <span>Cadastrar e Ativar Teste 24h</span>
+                    <span>Cadastrar & Ativar Teste 24h</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
 
                   <p className="text-[10px] text-center text-[#707777] mt-2 font-mono">
-                    Ativação imediata com Google
+                    Ativação imediata ao autenticar com o Google
                   </p>
                 </div>
               </div>
@@ -353,131 +417,93 @@ export const SaaSLandingLoginPage: React.FC<SaaSLandingLoginPageProps> = ({
         </div>
       </section>
 
-      {/* 5. Platform Capabilities Grid */}
-      <section className="px-6 lg:px-12 py-20 border-b border-[#003734]">
-        <div className="max-w-6xl mx-auto space-y-12">
-          <div className="text-center space-y-2">
-            <h2 className="text-2xl sm:text-3xl font-medium text-[#ffffff] tracking-tight">
-              Módulos de Inteligência Shazam Buscas
-            </h2>
-            <p className="text-sm text-[#bbc7c6]">
-              Acesso a bases de dados integradas com emissão de relatórios instantâneos e estruturados.
-            </p>
-          </div>
+      {/* 9. FAQ ACCORDION */}
+      <FaqAccordionSection />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div className="p-6 rounded-[14px] bg-[#00302d]/60 border border-[#00827c]/30 space-y-3">
-              <div className="w-10 h-10 rounded-[8px] bg-[#003734] flex items-center justify-center text-[#cbfffc]">
-                <Car className="w-5 h-5" />
-              </div>
-              <h3 className="text-base font-medium text-[#ffffff]">Veículos & Frotas</h3>
-              <p className="text-xs text-[#bbc7c6] leading-relaxed">
-                Consulta completa por placa Mercosul ou padrão antigo. Retorna marca, modelo, ano, chassi, motor, restrições e proprietário.
-              </p>
-            </div>
+      {/* 11. FINAL CTA BANNER */}
+      <section className="py-20 lg:py-28 bg-[#011413]">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-[#003431] via-[#012624] to-[#001c1a] border border-[#00827c]/50 p-10 lg:p-16 shadow-2xl">
+            <div className="absolute -top-20 -right-20 w-80 h-80 rounded-full bg-[#00827c]/20 blur-3xl pointer-events-none"></div>
 
-            <div className="p-6 rounded-[14px] bg-[#00302d]/60 border border-[#00827c]/30 space-y-3">
-              <div className="w-10 h-10 rounded-[8px] bg-[#003734] flex items-center justify-center text-[#cbfffc]">
-                <FileText className="w-5 h-5" />
+            <div className="relative grid lg:grid-cols-12 gap-8 items-center">
+              <div className="lg:col-span-7 space-y-4">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#003734] border border-[#00827c]/50 text-[#cbfffc] text-xs font-mono">
+                  <span>▸ COMECE EM MENOS DE 1 MINUTO</span>
+                </div>
+                <h2 className="text-3xl sm:text-5xl font-medium text-[#ffffff] tracking-tight leading-[1.1]">
+                  Pronto para ter <span className="text-[#cbfffc]">o dossiê</span> em mãos?
+                </h2>
+                <p className="text-[#bbc7c6] text-base max-w-xl leading-relaxed">
+                  37 módulos, cobertura nacional, ativação instantânea via PIX e teste gratuito de 24 horas liberado ao entrar.
+                </p>
               </div>
-              <h3 className="text-base font-medium text-[#ffffff]">CPF & Dossiês Pessoais</h3>
-              <p className="text-xs text-[#bbc7c6] leading-relaxed">
-                Situação cadastral na Receita Federal, data de nascimento, filiação, score presumido, patrimônio e processos vinculados.
-              </p>
-            </div>
 
-            <div className="p-6 rounded-[14px] bg-[#00302d]/60 border border-[#00827c]/30 space-y-3">
-              <div className="w-10 h-10 rounded-[8px] bg-[#003734] flex items-center justify-center text-[#cbfffc]">
-                <Building className="w-5 h-5" />
+              <div className="lg:col-span-5 flex flex-col gap-3">
+                <button
+                  onClick={onLoginGoogle}
+                  disabled={isAuthLoading}
+                  className="bg-gradient-to-r from-[#cbfffc] to-[#79fbf5] hover:opacity-95 text-[#012624] font-bold font-mono text-xs uppercase tracking-wider rounded-xl py-4 px-6 text-center transition flex items-center justify-center gap-2 shadow-lg cursor-pointer"
+                >
+                  <Crown className="w-4 h-4" />
+                  <span>Cadastrar & Ativar Teste 24h →</span>
+                </button>
               </div>
-              <h3 className="text-base font-medium text-[#ffffff]">CNPJ & Sociedades (QSA)</h3>
-              <p className="text-xs text-[#bbc7c6] leading-relaxed">
-                Quadro societário, capital social, CNAE primário/secundário, matriz/filial, faturamento estimado e situação fiscal.
-              </p>
-            </div>
-
-            <div className="p-6 rounded-[14px] bg-[#00302d]/60 border border-[#00827c]/30 space-y-3">
-              <div className="w-10 h-10 rounded-[8px] bg-[#003734] flex items-center justify-center text-[#cbfffc]">
-                <Phone className="w-5 h-5" />
-              </div>
-              <h3 className="text-base font-medium text-[#ffffff]">Telefonia & Operadora</h3>
-              <p className="text-xs text-[#bbc7c6] leading-relaxed">
-                Identificação de titularidade, operadora atual, portabilidade, status da linha e região DDD vinculada.
-              </p>
-            </div>
-
-            <div className="p-6 rounded-[14px] bg-[#00302d]/60 border border-[#00827c]/30 space-y-3">
-              <div className="w-10 h-10 rounded-[8px] bg-[#003734] flex items-center justify-center text-[#cbfffc]">
-                <Zap className="w-5 h-5" />
-              </div>
-              <h3 className="text-base font-medium text-[#ffffff]">Motor em Tempo Real Shazam Buscas</h3>
-              <p className="text-xs text-[#bbc7c6] leading-relaxed">
-                Processamento instantâneo via WebSockets e barramento de alta velocidade para respostas completas em ~1.5s.
-              </p>
-            </div>
-
-            <div className="p-6 rounded-[14px] bg-[#00302d]/60 border border-[#00827c]/30 space-y-3">
-              <div className="w-10 h-10 rounded-[8px] bg-[#003734] flex items-center justify-center text-[#cbfffc]">
-                <Database className="w-5 h-5" />
-              </div>
-              <h3 className="text-base font-medium text-[#ffffff]">Nuvem Cloud Firestore</h3>
-              <p className="text-xs text-[#bbc7c6] leading-relaxed">
-                Histórico confidencial, criptografado e sincronizado por operador. Retome investigações anteriores a qualquer hora.
-              </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* 6. Quick FAQ Section */}
-      <section className="px-6 lg:px-12 py-16 bg-[#01201e] border-b border-[#003734]">
-        <div className="max-w-4xl mx-auto space-y-8">
-          <div className="text-center space-y-2">
-            <h2 className="text-2xl font-medium text-[#ffffff]">Perguntas Frequentes</h2>
-            <p className="text-xs text-[#bbc7c6]">Informações sobre acesso, segurança e funcionamento do Shazam Buscas.</p>
+      {/* 12. FOOTER */}
+      <footer className="bg-[#011413] border-t border-[#003734] text-xs text-[#bbc7c6]/75">
+        <div className="max-w-6xl mx-auto px-6 py-14">
+          <div className="grid md:grid-cols-12 gap-10 mb-10">
+            <div className="md:col-span-5 space-y-4">
+              <div className="flex items-center gap-3">
+                <ShazamLogo size="sm" />
+                <span className="font-semibold text-[#ffffff] tracking-wide uppercase font-mono">
+                  SHAZAM BUSCAS
+                </span>
+              </div>
+              <p className="leading-relaxed max-w-sm text-[11px] text-[#bbc7c6]/70">
+                Sistema profissional de inteligência cadastral e investigativa. 
+                <strong className="text-[#ffffff]"> 37 módulos • cobertura nacional • dados cruzados • suporte humano.</strong>
+              </p>
+            </div>
+
+            <div className="md:col-span-2 space-y-3">
+              <h4 className="font-semibold text-[#ffffff] uppercase font-mono text-xs">Produto</h4>
+              <ul className="space-y-2 text-[11px]">
+                <li><a href="#modulos" className="hover:text-[#cbfffc] transition">37 Módulos</a></li>
+                <li><a href="#como" className="hover:text-[#cbfffc] transition">Como funciona</a></li>
+                <li><a href="#planos" className="hover:text-[#cbfffc] transition">Planos</a></li>
+              </ul>
+            </div>
+
+            <div className="md:col-span-2 space-y-3">
+              <h4 className="font-semibold text-[#ffffff] uppercase font-mono text-xs">Acesso</h4>
+              <ul className="space-y-2 text-[11px]">
+                <li>
+                  <button onClick={onLoginGoogle} className="hover:text-[#cbfffc] transition cursor-pointer text-left">
+                    Entrar com Google
+                  </button>
+                </li>
+                <li><a href="#planos" className="hover:text-[#cbfffc] transition">Assinar via PIX</a></li>
+              </ul>
+            </div>
+
+            <div className="md:col-span-3 space-y-3">
+              <h4 className="font-semibold text-[#ffffff] uppercase font-mono text-xs">Conformidade Legal</h4>
+              <p className="text-[11px] text-[#707777] leading-relaxed">
+                Uso restrito em conformidade com a LGPD (Lei Geral de Proteção de Dados). A responsabilidade pela finalidade do uso ético é estritamente do operador autenticado.
+              </p>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs text-[#bbc7c6]">
-            <div className="p-4 rounded-[10px] bg-[#00302d]/70 border border-[#00827c]/25 space-y-1.5">
-              <h4 className="font-medium text-[#ffffff] text-sm">Como obter acesso ao sistema?</h4>
-              <p>
-                O sistema é estritamente autenticado. Basta entrar com sua conta Google para liberar o acesso ao terminal e receber o período de teste gratuito de 24 horas.
-              </p>
-            </div>
-
-            <div className="p-4 rounded-[10px] bg-[#00302d]/70 border border-[#00827c]/25 space-y-1.5">
-              <h4 className="font-medium text-[#ffffff] text-sm">Quais os valores dos planos de assinatura?</h4>
-              <p>
-                Você pode contratar o Plano Semanal por R$ 11,00, o Plano 15 Dias por R$ 19,90 ou o Plano Mensal por R$ 35,00 com ativação imediata.
-              </p>
-            </div>
-
-            <div className="p-4 rounded-[10px] bg-[#00302d]/70 border border-[#00827c]/25 space-y-1.5">
-              <h4 className="font-medium text-[#ffffff] text-sm">Preciso instalar algum software?</h4>
-              <p>
-                Não. A plataforma Shazam Buscas opera 100% no navegador com conexão segura em tempo real e armazenamento criptografado na nuvem.
-              </p>
-            </div>
-
-            <div className="p-4 rounded-[10px] bg-[#00302d]/70 border border-[#00827c]/25 space-y-1.5">
-              <h4 className="font-medium text-[#ffffff] text-sm">Como os dados são protegidos?</h4>
-              <p>
-                Utilizamos o Firebase Firestore com regras de segurança estritas. Cada operador tem isolamento total e visualiza apenas suas próprias consultas.
-              </p>
-            </div>
+          <div className="pt-8 border-t border-[#003734] flex flex-wrap items-center justify-between gap-4 font-mono text-[10px] text-[#707777]">
+            <span>© {new Date().getFullYear()} Shazam Buscas. Todos os direitos reservados.</span>
+            <span>Segurança Criptografada • Terminal de Alta Velocidade</span>
           </div>
-        </div>
-      </section>
-
-      {/* 7. Footer */}
-      <footer className="py-8 px-6 lg:px-12 bg-[#011a19] text-xs text-[#707777] flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <ShazamLogo size="sm" />
-          <span className="text-[#bbc7c6]">SHAZAM BUSCAS • PLATAFORMA DE INTELIGÊNCIA CADASTRAL B2B</span>
-        </div>
-        <div className="flex items-center gap-6 font-mono text-[11px]">
-          <span>Planos: Semanal R$11 • 15 Dias R$19,90 • Mensal R$35</span>
-          <span>© {new Date().getFullYear()} Shazam Buscas. Todos os direitos reservados.</span>
         </div>
       </footer>
     </div>

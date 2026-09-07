@@ -34,7 +34,7 @@ export const PRICING_PLANS = [
     badgeColor: 'bg-[#003734] text-[#cbfffc] border-[#00827c]/40',
     description: 'Ideal para demandas pontuais, checagens rápidas ou testes operacionais.',
     features: [
-      '7 dias de teste grátis ao se cadastrar',
+      '24 horas de teste grátis ao se cadastrar',
       'Acesso a todos os 8 módulos de inteligência',
       'Consultas veiculares (Placas Mercosul/Antiga)',
       'Consultas de CPF, CNPJ e Telefones',
@@ -55,7 +55,7 @@ export const PRICING_PLANS = [
     badgeColor: 'bg-[#ffd166]/20 text-[#ffd166] border-[#ffd166]/50',
     description: 'O equilíbrio perfeito para profissionais autônomos, despachantes e consultores.',
     features: [
-      '7 dias de teste grátis no primeiro acesso',
+      '24 horas de teste grátis no primeiro acesso',
       'Todos os 8 módulos liberados',
       'Consultas ilimitadas no período',
       'Prioridade de processamento no despacho',
@@ -77,7 +77,7 @@ export const PRICING_PLANS = [
     badgeColor: 'bg-[#cbfffc]/15 text-[#cbfffc] border-[#cbfffc]/40',
     description: 'A solução definitiva para empresas, escritórios e rotinas contínuas de pesquisa.',
     features: [
-      '7 dias de teste grátis imediato',
+      '24 horas de teste grátis imediato',
       'Acesso contínuo 30 dias sem interrupção',
       'Máxima velocidade de resposta',
       'Sincronização em tempo real multi-dispositivo',
@@ -138,13 +138,13 @@ export const PricingModal: React.FC<PricingModalProps> = ({
         <div className="text-center max-w-2xl mx-auto mb-8 space-y-3">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#ffd166]/15 border border-[#ffd166]/40 text-[#ffd166] text-xs font-mono font-medium tracking-wide">
             <Sparkles className="w-3.5 h-3.5 text-[#ffd166]" />
-            <span>TESTE GRÁTIS DE 7 DIAS EM TODOS OS PLANOS</span>
+            <span>TESTE GRÁTIS DE 24 HORAS EM TODOS OS PLANOS</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-medium text-[#ffffff] tracking-tight font-['DM_Sans',sans-serif]">
             Planos de Assinatura Simples e Transparentes
           </h2>
           <p className="text-sm text-[#bbc7c6]">
-            Todos os novos clientes que entrarem com o Google ganham o <strong className="text-[#cbfffc]">Plano Premium</strong> com <strong className="text-[#ffd166]">7 dias de teste liberado</strong> sem compromisso.
+            Todos os novos clientes que entrarem com o Google ganham o <strong className="text-[#cbfffc]">Plano Premium</strong> com <strong className="text-[#ffd166]">24 horas de teste liberado</strong> sem compromisso.
           </p>
         </div>
 
@@ -198,7 +198,7 @@ export const PricingModal: React.FC<PricingModalProps> = ({
                   </div>
                   <div className="mt-1 flex items-center gap-2 text-[11px] text-[#707777]">
                     <span className="line-through">De R$ {plan.originalPrice}</span>
-                    <span className="text-[#cbfffc] font-mono font-medium">Com 7 dias grátis</span>
+                    <span className="text-[#cbfffc] font-mono font-medium">Com teste 24h grátis</span>
                   </div>
                 </div>
 
@@ -226,7 +226,7 @@ export const PricingModal: React.FC<PricingModalProps> = ({
                   }`}
                 >
                   <Crown className="w-3.5 h-3.5" />
-                  <span>{currentUser ? plan.ctaText : 'Começar com 7 Dias Grátis'}</span>
+                  <span>{currentUser ? plan.ctaText : 'Começar com Teste 24h Grátis'}</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
 

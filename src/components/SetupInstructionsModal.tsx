@@ -192,7 +192,7 @@ export const SetupInstructionsModal: React.FC<SetupInstructionsModalProps> = ({
                   </div>
                   {currentUser && (
                     <span className="px-2 py-0.5 rounded-[4px] bg-[#ffd166]/20 border border-[#ffd166]/40 text-[#ffd166] text-[10px] font-mono font-medium">
-                      PLANO PREMIUM ATIVO (7 DIAS)
+                      PLANO PREMIUM ATIVO (TESTE 24H)
                     </span>
                   )}
                 </div>
@@ -243,7 +243,7 @@ export const SetupInstructionsModal: React.FC<SetupInstructionsModalProps> = ({
                 ) : (
                   <div className="space-y-4 text-center py-4">
                     <p className="text-xs text-[#bbc7c6] max-w-md mx-auto">
-                      Autentique-se com sua conta Google para liberar o teste gratuito de 7 dias do Plano Premium e salvar seu histórico de forma confidencial.
+                      Autentique-se com sua conta Google para liberar o teste gratuito de 24 horas do Plano Premium e salvar seu histórico de forma confidencial.
                     </p>
                     <button
                       onClick={onLoginGoogle}

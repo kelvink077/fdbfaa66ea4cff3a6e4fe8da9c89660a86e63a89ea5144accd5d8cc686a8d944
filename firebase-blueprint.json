@@ -31,6 +31,42 @@
         "resultado_resumo": "string",
         "resposta_bruta": "string"
       }
+    },
+    "ReferralRecord": {
+      "collection": "referrals",
+      "fields": {
+        "id": "string",
+        "resellerId": "string",
+        "resellerCode": "string",
+        "referredUserId": "string",
+        "name": "string",
+        "email": "string",
+        "registeredAt": "string",
+        "status": "string",
+        "planId": "string",
+        "planName": "string",
+        "planAmount": "number",
+        "commissionRate": "number",
+        "commissionValue": "number",
+        "estimatedIncome": "number",
+        "paidAt": "string"
+      }
+    },
+    "WithdrawalOrder": {
+      "collection": "withdrawals",
+      "fields": {
+        "id": "string",
+        "resellerId": "string",
+        "resellerEmail": "string",
+        "amount": "number",
+        "pixKeyType": "string",
+        "pixKey": "string",
+        "accountHolder": "string",
+        "status": "string",
+        "createdAt": "string",
+        "estimatedPaymentTime": "string",
+        "completedAt": "string"
+      }
     }
   }
 }
