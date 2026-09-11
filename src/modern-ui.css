@@ -1,0 +1,277 @@
+/*
+ * SHAZAM / REMIX ALADIM — Modern UI layer
+ * Visual-only enhancement. Existing application logic and data flows remain untouched.
+ */
+
+:root {
+  --ui-bg: #061b1a;
+  --ui-surface: rgba(9, 36, 34, 0.78);
+  --ui-surface-strong: rgba(13, 48, 45, 0.9);
+  --ui-border: rgba(203, 255, 252, 0.12);
+  --ui-border-strong: rgba(203, 255, 252, 0.22);
+  --ui-text: #f4fffe;
+  --ui-text-soft: #b7cfcd;
+  --ui-muted: #77918f;
+  --ui-accent: #75f6eb;
+  --ui-accent-2: #c9a8ff;
+  --ui-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+  --ui-glow: 0 0 0 1px rgba(117, 246, 235, 0.06), 0 18px 55px rgba(0, 130, 124, 0.13);
+}
+
+html {
+  scroll-behavior: smooth;
+  background: var(--ui-bg);
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 15% -10%, rgba(117, 246, 235, 0.12), transparent 32%),
+    radial-gradient(circle at 92% 0%, rgba(201, 168, 255, 0.10), transparent 28%),
+    linear-gradient(180deg, #071f1e 0%, #041413 100%);
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: linear-gradient(to bottom, black, transparent 88%);
+  opacity: .35;
+}
+
+#root {
+  min-height: 100vh;
+  position: relative;
+  isolation: isolate;
+}
+
+/* Scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(117, 246, 235, 0.26) transparent;
+}
+
+/* Better text rendering */
+button, input, textarea, select {
+  font: inherit;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Glass surfaces used by existing components */
+[class*="bg-[#003734]"],
+[class*="bg-[#012624]"],
+[class*="bg-[#011d1c]"],
+[class*="bg-\[\#003734\]"],
+[class*="bg-\[\#012624\]"],
+[class*="bg-\[\#011d1c\]"] {
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.rf-report-dashboard,
+.rf-results-panel,
+.rf-kpi-card,
+.rf-data-tile,
+.rf-audit-card {
+  box-shadow: var(--ui-glow);
+  border-color: var(--ui-border);
+}
+
+.rf-report-dashboard {
+  background:
+    linear-gradient(145deg, rgba(11, 48, 45, 0.92), rgba(5, 27, 26, 0.92));
+  box-shadow: var(--ui-shadow), var(--ui-glow);
+}
+
+.rf-kpi-card,
+.rf-data-tile {
+  background: linear-gradient(145deg, rgba(13, 49, 46, 0.76), rgba(7, 29, 28, 0.86));
+}
+
+.rf-kpi-card:hover,
+.rf-data-tile:hover,
+.rf-audit-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--ui-border-strong);
+  box-shadow: 0 16px 38px rgba(0,0,0,.22), 0 0 0 1px rgba(117,246,235,.08);
+}
+
+.rf-kpi-card,
+.rf-data-tile,
+.rf-audit-card,
+.rf-report-dashboard,
+.rf-results-panel {
+  transition: transform .22s ease, border-color .22s ease, box-shadow .22s ease, background-color .22s ease;
+}
+
+/* Global interactive polish */
+button:not(:disabled),
+a[role="button"] {
+  transition: transform .18s ease, filter .18s ease, box-shadow .18s ease, border-color .18s ease, background-color .18s ease;
+}
+
+button:not(:disabled):hover,
+a[role="button"]:hover {
+  filter: brightness(1.04);
+}
+
+button:not(:disabled):active,
+a[role="button"]:active {
+  transform: translateY(1px) scale(.99);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(117, 246, 235, 0.16), 0 0 0 1px rgba(117, 246, 235, 0.46);
+}
+
+input,
+textarea,
+select {
+  border-color: rgba(203, 255, 252, 0.13) !important;
+  background: rgba(4, 23, 22, 0.66) !important;
+  color: var(--ui-text) !important;
+  transition: border-color .18s ease, box-shadow .18s ease, background-color .18s ease;
+}
+
+input:hover,
+textarea:hover,
+select:hover {
+  border-color: rgba(203, 255, 252, 0.24) !important;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: rgba(117, 246, 235, 0.58) !important;
+  background: rgba(7, 30, 29, 0.88) !important;
+  box-shadow: 0 0 0 3px rgba(117, 246, 235, 0.08), 0 8px 28px rgba(0, 0, 0, .16);
+}
+
+::placeholder {
+  color: #6e8886 !important;
+}
+
+/* Premium tabs */
+.rf-segmented-tabs {
+  background: rgba(2, 17, 17, 0.68);
+  border-color: rgba(203,255,252,.10);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.025);
+}
+
+.rf-tab-button.active {
+  box-shadow: 0 5px 18px rgba(0, 130, 124, .18), inset 0 1px 0 rgba(255,255,255,.42);
+}
+
+/* Pills and status */
+.rf-badge {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+}
+
+.rf-status-dot-emerald,
+.rf-status-dot-cyan,
+.rf-status-dot-rose {
+  animation: ui-pulse 2.6s ease-in-out infinite;
+}
+
+@keyframes ui-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .72; transform: scale(.88); }
+}
+
+/* Subtle entrance motion without hijacking app transitions */
+.rf-report-dashboard,
+.rf-results-panel,
+.rf-kpi-grid > *,
+.rf-data-grid > * {
+  animation: ui-rise .45s cubic-bezier(.16, 1, .3, 1) both;
+}
+
+@keyframes ui-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Make modals feel like product UI rather than generic dialogs */
+[role="dialog"] > div,
+.fixed.inset-0 > div[class*="rounded"] {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* Sidebar / mobile navigation */
+aside {
+  border-color: rgba(203, 255, 252, 0.10) !important;
+}
+
+/* Cards with a more intentional hierarchy */
+.rf-section-title {
+  letter-spacing: .14em;
+}
+
+.rf-kpi-label,
+.rf-data-tile-label {
+  color: #8ba5a3;
+}
+
+.rf-kpi-value,
+.rf-data-tile-value {
+  letter-spacing: -.01em;
+}
+
+/* Responsive polish */
+@media (max-width: 1023px) {
+  .rf-report-dashboard {
+    padding: 18px;
+    gap: 18px;
+  }
+}
+
+@media (max-width: 639px) {
+  body {
+    background:
+      radial-gradient(circle at 15% -10%, rgba(117, 246, 235, .10), transparent 38%),
+      linear-gradient(180deg, #071f1e 0%, #041413 100%);
+  }
+
+  .rf-report-dashboard {
+    border-radius: 14px;
+    padding: 14px;
+  }
+
+  .rf-header-toolbar {
+    align-items: stretch;
+  }
+
+  .rf-segmented-tabs {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .rf-tab-button {
+    flex: 0 0 auto;
+    min-height: 38px;
+  }
+}
+
+/* Reduced motion accessibility */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
