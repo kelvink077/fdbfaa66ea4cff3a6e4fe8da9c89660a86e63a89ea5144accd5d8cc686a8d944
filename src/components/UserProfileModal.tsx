@@ -14,7 +14,8 @@ import {
   ArrowUpRight,
   Zap,
   Layers,
-  Search
+  Search,
+  ShieldAlert
 } from 'lucide-react';
 import type { User as FirebaseUser } from 'firebase/auth';
 import type { UserProfileData } from '../lib/firebase';
@@ -28,6 +29,7 @@ interface UserProfileModalProps {
   onOpenPricing: () => void;
   onLogout: () => void;
   onOpenSetup?: () => void;
+  onOpenAdminDashboard?: () => void;
   isAdmin?: boolean;
 }
 
@@ -39,21 +41,27 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   onOpenPricing,
   onLogout,
   onOpenSetup,
+  onOpenAdminDashboard,
   isAdmin,
 }) => {
   if (!isOpen || !currentUser) return null;
 
   const validity = calculateAccountValidity(userProfile);
+  const isLifetime = isAdmin || validity.isLifetime || userProfile?.plan === 'lifetime';
   
   // Lógica inteligente para alternar entre "Teste 24 Horas" e "Assinatura Paga"
-  const isTrial = userProfile?.plan === 'trial';
+  const isTrial = !isLifetime && userProfile?.plan === 'trial';
   const isActuallyValid = validity.isValid;
   
-  const statusBadgeText = isTrial 
+  const statusBadgeText = isLifetime
+    ? '● Administrador Lifetime Infinito'
+    : isTrial 
     ? (isActuallyValid ? '● Teste 24h Ativo' : '● Teste 24h Expirado') 
     : (validity.isValid ? '● Acesso Liberado' : '● Expirado');
 
-  const progressBarWidth = isTrial
+  const progressBarWidth = isLifetime
+    ? 100
+    : isTrial
     ? Math.min(100, Math.max(5, (validity.hoursRemaining / 24) * 100))
     : Math.min(100, Math.max(5, (validity.daysRemaining / 30) * 100));
 
@@ -141,10 +149,12 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           <div className="my-4">
             <div className="flex items-baseline gap-2">
               <span className="text-3xl sm:text-4xl font-mono font-bold text-[#ffffff] tracking-tight">
-                {isTrial ? validity.hoursRemaining : validity.daysRemaining}
+                {isLifetime ? '∞' : (isTrial ? validity.hoursRemaining : validity.daysRemaining)}
               </span>
-              <span className="text-sm font-mono text-[#cbfffc] uppercase tracking-wider">
-                {isTrial 
+              <span className="text-sm font-mono text-[#ffd166] uppercase tracking-wider font-bold">
+                {isLifetime 
+                  ? 'Acesso Lifetime Eterno (Sem expiração)' 
+                  : isTrial 
                   ? (validity.hoursRemaining === 1 ? 'hora restante (teste 24h)' : 'horas restantes (teste 24h)')
                   : (validity.daysRemaining === 1 ? 'dia restante' : 'dias restantes')}
               </span>
@@ -153,7 +163,13 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             {/* Visual progress bar */}
             <div className="w-full h-2 rounded-full bg-[#012624] border border-[#00827c]/40 mt-3 overflow-hidden">
               <div 
-                className={`h-full rounded-full transition-all duration-500 ${isActuallyValid ? 'bg-gradient-to-r from-[#00827c] via-[#79fbf5] to-[#cbfffc]' : 'bg-rose-500'}`}
+                className={`h-full rounded-full transition-all duration-500 ${
+                  isLifetime
+                    ? 'bg-gradient-to-r from-[#ffd166] via-[#f59e0b] to-[#ffd166]'
+                    : isActuallyValid 
+                    ? 'bg-gradient-to-r from-[#00827c] via-[#79fbf5] to-[#cbfffc]' 
+                    : 'bg-rose-500'
+                }`}
                 style={{ width: `${progressBarWidth}%` }}
               ></div>
             </div>
@@ -165,7 +181,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               <span className="text-[#707777] block text-[10px] uppercase">Data de Expiração</span>
               <span className="text-[#ffffff] font-semibold flex items-center gap-1.5 mt-0.5">
                 <Calendar className="w-3.5 h-3.5 text-[#cbfffc]" />
-                {validity.expirationDateFormatted}
+                {isLifetime ? 'Vitalício / Infinito' : validity.expirationDateFormatted}
               </span>
             </div>
 
@@ -173,7 +189,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               <span className="text-[#707777] block text-[10px] uppercase">Status do Plano</span>
               <span className="text-[#edfffe] font-medium flex items-center gap-1.5 mt-0.5">
                 <ShieldCheck className="w-3.5 h-3.5 text-[#ffd166]" />
-                {validity.statusText}
+                {isLifetime ? 'Administrador Vitalício Total' : validity.statusText}
               </span>
             </div>
           </div>
@@ -213,18 +229,42 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
         {/* Action Buttons */}
         <div className="space-y-3">
-          <button
-            type="button"
-            onClick={() => {
-              onClose();
-              onOpenPricing();
-            }}
-            className="w-full py-3 px-4 rounded-[8px] bg-gradient-to-r from-[#ffd166] to-[#ffdc85] hover:opacity-95 text-[#012624] font-bold text-xs font-mono uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 shadow-md hover:scale-[1.01]"
-          >
-            <Zap className="w-4 h-4 text-[#012624]" />
-            <span>{isTrial ? 'Assinar Plano Premium (Via PIX)' : 'Renovar ou Adicionar Mais Dias (Via PIX)'}</span>
-            <ArrowUpRight className="w-4 h-4 text-[#012624]" />
-          </button>
+          {isLifetime ? (
+            <div className="p-3 rounded-lg bg-[#ffd166]/10 border border-[#ffd166]/40 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Crown className="w-4 h-4 text-[#ffd166]" />
+                <span className="text-xs font-mono font-bold text-[#ffd166]">
+                  Acesso Administrador Eterno Ativo
+                </span>
+              </div>
+              {onOpenAdminDashboard && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenAdminDashboard();
+                  }}
+                  className="px-3 py-1.5 rounded-md bg-[#ffd166] text-[#012624] font-mono font-bold text-xs hover:bg-[#ffe082] transition-colors cursor-pointer flex items-center gap-1.5"
+                >
+                  <ShieldAlert className="w-3.5 h-3.5" />
+                  <span>Painel Admin</span>
+                </button>
+              )}
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenPricing();
+              }}
+              className="w-full py-3 px-4 rounded-[8px] bg-gradient-to-r from-[#ffd166] to-[#ffdc85] hover:opacity-95 text-[#012624] font-bold text-xs font-mono uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 shadow-md hover:scale-[1.01]"
+            >
+              <Zap className="w-4 h-4 text-[#012624]" />
+              <span>{isTrial ? 'Assinar Plano Premium (Via PIX)' : 'Renovar ou Adicionar Mais Dias (Via PIX)'}</span>
+              <ArrowUpRight className="w-4 h-4 text-[#012624]" />
+            </button>
+          )}
 
           {/* Admin Setup Panel Link */}
           {isAdmin && onOpenSetup && (

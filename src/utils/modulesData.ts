@@ -89,4 +89,15 @@ export const QUERY_MODULES: QueryModuleInfo[] = [
     description: 'Operadora atual, histórico de portabilidade, titularidade presumida de linha, tipo (Fixo/Móvel) e geolocalização do DDD.',
     defaultSample: '(11) 98452-1920',
   },
+  {
+    id: 'cep',
+    title: 'CEP / ENDEREÇO',
+    subtitle: 'Moradores do CEP',
+    category: 'Veículos & Contato',
+    placeholder: '00000-000 ou Logradouro',
+    iconName: 'MapPin',
+    badge: 'Territorial',
+    description: 'Identificação de todos os moradores do CEP via varredura multimódulos (até 1 min) e dossiê aprofundado multi-pessoas passo a passo (até 7 min).',
+    defaultSample: '01418-100',
+  },
 ];

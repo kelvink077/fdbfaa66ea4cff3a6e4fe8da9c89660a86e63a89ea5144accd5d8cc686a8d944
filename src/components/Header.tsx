@@ -7,6 +7,7 @@ import {
   Crown,
   Loader2,
   ShieldCheck,
+  ShieldAlert,
   Zap,
   FileCode,
   Sparkles,
@@ -31,10 +32,13 @@ interface HeaderProps {
   onOpenSetup?: () => void;
   onOpenPricing?: () => void;
   onOpenProfile?: () => void;
+  onOpenAdminDashboard?: () => void;
   onOpenCode?: () => void;
   onOpenProModal?: () => void;
   onOpenKrexModal?: () => void;
   onOpenZyrexModal?: () => void;
+  onOpenSmartMaps?: () => void;
+  onOpenCepScan?: () => void;
   telegramConfig?: TelegramConfigState;
   onReconnectTelegram?: () => void;
   isReconnectingTelegram?: boolean;
@@ -54,10 +58,13 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSetup,
   onOpenPricing,
   onOpenProfile,
+  onOpenAdminDashboard,
   onOpenCode,
   onOpenProModal,
   onOpenKrexModal,
   onOpenZyrexModal,
+  onOpenSmartMaps,
+  onOpenCepScan,
   telegramConfig,
   onReconnectTelegram,
   isReconnectingTelegram,
@@ -65,6 +72,12 @@ export const Header: React.FC<HeaderProps> = ({
   isMobileMenuOpen = false,
 }) => {
   const validity = calculateAccountValidity(userProfile);
+  const isAdmin = Boolean(
+    (currentUser?.email && ['wrbatata6@gmail.com'].includes(currentUser.email.toLowerCase())) ||
+    userProfile?.role === 'admin' ||
+    userProfile?.plan === 'lifetime' ||
+    validity.isLifetime
+  );
 
   return (
     <header className="h-16 sm:h-20 border-b border-[#003734] flex items-center justify-between px-3 sm:px-6 lg:px-12 bg-[#012624] sticky top-0 z-30 w-full max-w-full overflow-hidden">
@@ -101,9 +114,6 @@ export const Header: React.FC<HeaderProps> = ({
               </h1>
               <span className="text-[9px] sm:text-[10px] uppercase tracking-[0.15em] px-1.5 sm:px-2 py-0.5 rounded-[4px] bg-[#003734] text-[#cbfffc] border border-[#00827c]/40 font-mono font-medium hidden sm:inline-block shrink-0">
                 INTELIGÊNCIA
-              </span>
-              <span className="text-[9px] sm:text-[10px] uppercase tracking-[0.12em] px-1.5 sm:px-2 py-0.5 rounded-[4px] bg-[#011d1c] text-[#edfffe] border border-[#003734] font-medium hidden md:inline-block font-mono shrink-0">
-                B2B EM TEMPO REAL
               </span>
             </div>
           </div>
@@ -166,18 +176,29 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="hidden sm:flex flex-col text-left">
               <div className="flex items-center gap-1.5">
                 <span className="text-[11px] font-medium text-[#ffffff] leading-tight max-w-[90px] md:max-w-[120px] truncate group-hover:text-[#cbfffc] transition-colors">
-                  {currentUser.displayName || currentUser.email?.split('@')[0] || 'Operador'}
+                  {currentUser.displayName || currentUser.email?.split('@')[0] || (isAdmin ? 'Administrador' : 'Operador')}
                 </span>
-                <span className="px-1.5 py-0.2 rounded-[4px] bg-[#ffd166]/20 border border-[#ffd166]/40 text-[#ffd166] text-[9px] font-mono font-medium tracking-tight flex items-center gap-0.5">
+                <span className={`px-1.5 py-0.2 rounded-[4px] border text-[9px] font-mono font-bold tracking-tight flex items-center gap-0.5 ${
+                  isAdmin || validity.isLifetime
+                    ? 'bg-[#ffd166]/20 border-[#ffd166] text-[#ffd166]'
+                    : 'bg-[#ffd166]/20 border-[#ffd166]/40 text-[#ffd166]'
+                }`}>
                   <Crown className="w-2.5 h-2.5 text-[#ffd166]" />
-                  {userProfile?.plan ? userProfile.plan.toUpperCase() : 'PREMIUM'}
+                  {isAdmin || validity.isLifetime ? 'LIFETIME' : (userProfile?.plan ? userProfile.plan.toUpperCase() : 'PREMIUM')}
                 </span>
               </div>
               <div className="flex items-center gap-1.5 text-[9px] font-mono mt-0.5">
-                <span className="text-[#cbfffc] uppercase tracking-wider flex items-center gap-1 leading-none">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#cbfffc] animate-pulse"></span>
-                  {validity.daysRemaining}d restantes
-                </span>
+                {isAdmin || validity.isLifetime ? (
+                  <span className="text-[#ffd166] uppercase tracking-wider flex items-center gap-1 leading-none font-bold">
+                    <Sparkles className="w-2.5 h-2.5 text-[#ffd166]" />
+                    ETERNO (VITALÍCIO)
+                  </span>
+                ) : (
+                  <span className="text-[#cbfffc] uppercase tracking-wider flex items-center gap-1 leading-none">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#cbfffc] animate-pulse"></span>
+                    {validity.daysRemaining}d restantes
+                  </span>
+                )}
                 <span className="text-[#707777] hidden md:inline">• Perfil</span>
               </div>
             </div>
@@ -259,6 +280,24 @@ export const Header: React.FC<HeaderProps> = ({
             BOT
           </span>
         </button>
+
+        {/* Admin Dashboard Button (Only for Administrator) */}
+        {isAdmin && onOpenAdminDashboard && (
+          <button
+            id="btn-header-admin-dashboard"
+            onClick={onOpenAdminDashboard}
+            className="relative group overflow-hidden flex items-center gap-1 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 bg-gradient-to-r from-[#ffd166]/20 via-[#ffd166]/10 to-[#ffd166]/20 hover:from-[#ffd166]/30 hover:to-[#ffd166]/20 border border-[#ffd166] text-[#ffd166] rounded-[8px] text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer shadow-md hover:scale-105 shrink-0"
+            title="Abrir Painel Administrativo Completo (Clientes, Faturamento, Consultas e Cupons)"
+          >
+            <ShieldAlert className="w-3.5 h-3.5 text-[#ffd166] shrink-0" />
+            <span className="font-extrabold tracking-wider font-mono text-[11px] sm:text-xs">
+              <span className="hidden sm:inline">PAINEL </span>ADMIN
+            </span>
+            <span className="hidden sm:inline-block text-[9px] bg-[#ffd166] text-[#011d1c] px-1.5 py-0.5 rounded font-mono font-bold tracking-tight">
+              MASTER
+            </span>
+          </button>
+        )}
 
         {/* Active Queue indicator */}
         {activeRequestsCount > 0 && (

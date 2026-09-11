@@ -15,11 +15,15 @@ import {
   Calendar,
   ArrowRight,
   Shield,
-  FileCheck
+  FileCheck,
+  Tag,
+  ChevronDown
 } from 'lucide-react';
 import type { User as FirebaseUser } from 'firebase/auth';
 import type { UserProfileData } from '../lib/firebase';
 import { creditUserPlanValidity, calculateAccountValidity } from '../lib/firebase';
+import { checkCouponValidity, redeemActivationCode, burnDiscountCoupon } from '../lib/couponService';
+import { DiscountAttentionModal } from './DiscountAttentionModal';
 
 export interface PixCheckoutModalProps {
   isOpen: boolean;
@@ -28,6 +32,8 @@ export interface PixCheckoutModalProps {
   currentUser: FirebaseUser | null;
   userProfile?: UserProfileData | null;
   onPaymentSuccess?: (updatedProfile: UserProfileData) => void;
+  initialDiscountCode?: string;
+  initialDiscountedPrice?: number;
 }
 
 const PLAN_META: Record<string, { name: string; price: string; amount: number; days: number; desc: string }> = {
@@ -61,6 +67,8 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
   currentUser,
   userProfile,
   onPaymentSuccess,
+  initialDiscountCode,
+  initialDiscountedPrice,
 }) => {
   const plan = PLAN_META[planId] || PLAN_META.weekly;
 
@@ -75,6 +83,19 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
   const [termsError, setTermsError] = useState('');
   const [showTermsModal, setShowTermsModal] = useState(false);
 
+  // Estados de Desconto e Ativação (Somente Plano Mensal R$ 35)
+  const isMonthlyPlan = planId === 'monthly';
+  const [showCouponInput, setShowCouponInput] = useState(false);
+  const [couponCodeInput, setCouponCodeInput] = useState('');
+  const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
+  const [couponError, setCouponError] = useState('');
+  const [couponSuccessMsg, setCouponSuccessMsg] = useState('');
+  const [activeDiscountCode, setActiveDiscountCode] = useState<string | undefined>(initialDiscountCode);
+  const [activeDiscountPrice, setActiveDiscountPrice] = useState<number | undefined>(initialDiscountedPrice);
+  const [showAttentionModal, setShowAttentionModal] = useState(false);
+  const [isDirectActivation, setIsDirectActivation] = useState(false);
+  const [activationMsg, setActivationMsg] = useState('');
+
   // PIX Data returned by UP DEPIX
   const [depositId, setDepositId] = useState<string | null>(null);
   const [qrCodeText, setQrCodeText] = useState('');
@@ -85,6 +106,10 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
 
   // Polling ref
   const pollIntervalRef = useRef<any>(null);
+
+  // Preço calculado dinamicamente
+  const currentAmount = (isMonthlyPlan && activeDiscountPrice) ? activeDiscountPrice : plan.amount;
+  const currentPriceFormatted = (isMonthlyPlan && activeDiscountPrice) ? activeDiscountPrice.toFixed(2).replace('.', ',') : plan.price;
 
   // Reset modal state on open
   useEffect(() => {
@@ -101,6 +126,14 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
       setTermsError('');
       setShowTermsModal(false);
       setCreditedProfile(null);
+      setShowCouponInput(false);
+      setCouponCodeInput('');
+      setCouponError('');
+      setCouponSuccessMsg('');
+      setIsDirectActivation(false);
+      setActivationMsg('');
+      setActiveDiscountCode(initialDiscountCode);
+      setActiveDiscountPrice(initialDiscountedPrice);
       if (currentUser?.displayName) {
         setPayerName(currentUser.displayName);
       }
@@ -109,7 +142,7 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
         clearInterval(pollIntervalRef.current);
       }
     }
-  }, [isOpen, currentUser, planId]);
+  }, [isOpen, currentUser, planId, initialDiscountCode, initialDiscountedPrice]);
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -121,6 +154,62 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
   }, []);
 
   if (!isOpen) return null;
+
+  // Handler para validar código dentro do Checkout Modal (Somente Plano Mensal)
+  const handleApplyCouponInModal = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const cleanCode = couponCodeInput.trim().toUpperCase();
+    if (!cleanCode) {
+      setCouponError('Digite seu código.');
+      return;
+    }
+
+    setIsValidatingCoupon(true);
+    setCouponError('');
+    setCouponSuccessMsg('');
+
+    try {
+      const check = await checkCouponValidity(cleanCode);
+      if (!check.valid || !check.coupon) {
+        setCouponError(check.error || 'Código inválido ou já utilizado.');
+        return;
+      }
+
+      if (check.coupon.type === 'activation') {
+        // CÓDIGO DE ATIVAÇÃO DIRETA (100% GRÁTIS):
+        // "se uma pessoa tiver um codigo de ativação e digitar o codigo valido o sistema não direciona ao chekout pois o codigo de ativação não necessita pagamento, se codigo for reconhecido deve ser informado: codigo de ativação aplicado sua conta já esta ativa por 30 dias"
+        if (!currentUser) {
+          setCouponError('Você precisa estar autenticado para ativar sua conta.');
+          return;
+        }
+
+        const res = await redeemActivationCode(check.coupon.code, currentUser, userProfile);
+        if (res.success) {
+          setIsDirectActivation(true);
+          setActivationMsg('Código de ativação aplicado, sua conta já está ativa por 30 dias');
+          if (res.updatedProfile) {
+            setCreditedProfile(res.updatedProfile);
+            if (onPaymentSuccess) {
+              onPaymentSuccess(res.updatedProfile);
+            }
+          }
+          setStep('success');
+        } else {
+          setCouponError(res.error || 'Falha ao ativar com este código.');
+        }
+      } else if (check.coupon.type === 'discount') {
+        // CÓDIGO DE DESCONTO DE NOVO USUÁRIO:
+        // "o mesmo vale para o codigo de desconto de novo usuario na qual o mesmo vai dar um desconto na qual o valor do plano de 35 reais cai apenas para 11 reais no primeiro mes para novos usuarios."
+        setActiveDiscountCode(check.coupon.code);
+        setActiveDiscountPrice(11.00);
+        setCouponSuccessMsg('Código de desconto aplicado! Plano mensal de R$ 35,00 por apenas R$ 11,00 no 1º mês.');
+      }
+    } catch (err: any) {
+      setCouponError(err?.message || 'Erro ao consultar código.');
+    } finally {
+      setIsValidatingCoupon(false);
+    }
+  };
 
   // Mask CPF (000.000.000-00) or CNPJ (00.000.000/0000-00)
   const handleDocumentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -147,8 +236,8 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
     if (setDocError) setDocError('');
   };
 
-  // Step 1: Submit to UP DEPIX /api/payment/create-pix no backend
-  const handleGeneratePix = async (e?: React.FormEvent) => {
+  // Submissão do formulário: se tiver código de desconto ativo, deve exigir a confirmação de atenção
+  const handleFormSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
     const cleanDoc = payerDocument.replace(/\D/g, '');
@@ -162,11 +251,37 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
       return;
     }
 
+    // Regra mandatória com código de desconto:
+    // "quando o cliente for pagar e digitar o codigo de desconto valido o sistema deve informar para ele: antes de clicar no botão pagar tenha atenção pois caso o pagamento não seja concluido esse codigo de desconto será perdido deseja efetuar o pagamento agora ou em outro momento ?"
+    if (isMonthlyPlan && activeDiscountCode) {
+      setShowAttentionModal(true);
+      return;
+    }
+
+    // Se não tem desconto pendente de confirmação, prossegue normalmente
+    executeGeneratePix();
+  };
+
+  // Confirmou pagamento no Modal de Atenção (Queima o cupom de desconto e gera a chave PIX)
+  const handleConfirmDiscountPayment = async () => {
+    setShowAttentionModal(false);
+    if (activeDiscountCode && currentUser) {
+      try {
+        await burnDiscountCoupon(activeDiscountCode, currentUser);
+      } catch (err) {
+        console.warn('[PixCheckoutModal] Erro ao consumir cupom:', err);
+      }
+    }
+    executeGeneratePix();
+  };
+
+  // Executa a chamada à API UP DEPIX
+  const executeGeneratePix = async () => {
+    const cleanDoc = payerDocument.replace(/\D/g, '');
     setIsLoading(true);
     setErrorMessage('');
 
     try {
-      // URL base do Backend no Render
       const backendUrl = import.meta.env.VITE_API_URL || 'https://shazam-ygad.onrender.com';
 
       const response = await fetch(`${backendUrl}/api/payment/create-pix`, {
@@ -178,6 +293,8 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
           userEmail: currentUser?.email || '',
           userName: payerName,
           payerDocument: cleanDoc,
+          customAmount: currentAmount,
+          discountCode: activeDiscountCode || undefined,
         }),
       });
 
@@ -195,7 +312,7 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
       setExpiresAt(exp);
       setStep('qr');
 
-      // Start automatic polling every 3 seconds
+      // Start automatic polling every 3.5 seconds
       startStatusPolling(id, cleanDoc, qrCopyPaste);
     } catch (err: any) {
       console.error('[PixCheckoutModal] Erro:', err);
@@ -230,7 +347,7 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
         if (currentUser) {
           const updated = await creditUserPlanValidity(currentUser.uid, planId, {
             depositId: depId,
-            amount: plan.amount,
+            amount: currentAmount,
             payerDocument: docClean,
             qrCopyPaste: qrCodeStr,
           });
@@ -268,7 +385,7 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
         if (currentUser) {
           const updated = await creditUserPlanValidity(currentUser.uid, planId, {
             depositId,
-            amount: plan.amount,
+            amount: currentAmount,
             payerDocument: payerDocument.replace(/\D/g, ''),
             qrCopyPaste: qrCodeText,
           });
@@ -344,14 +461,21 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
             </p>
 
             {/* Price Card */}
-            <div className="p-4 rounded-[12px] bg-[#011d1c] border border-[#003734] mb-5 flex items-center justify-between">
+            <div className="p-4 rounded-[12px] bg-[#011d1c] border border-[#003734] mb-4 flex items-center justify-between">
               <div>
-                <span className="text-[11px] font-mono text-[#707777] block">Valor a pagar via PIX</span>
+                <span className="text-[11px] font-mono text-[#707777] block">
+                  {activeDiscountCode ? 'Valor com Desconto de Novo Usuário' : 'Valor a pagar via PIX'}
+                </span>
                 <div className="flex items-baseline gap-1 mt-0.5">
                   <span className="text-xs font-mono text-[#cbfffc]">R$</span>
-                  <span className="text-2xl sm:text-3xl font-mono font-bold text-[#ffffff]">
-                    {plan.price}
+                  <span className={`text-2xl sm:text-3xl font-mono font-bold ${activeDiscountCode ? 'text-emerald-400' : 'text-[#ffffff]'}`}>
+                    {currentPriceFormatted}
                   </span>
+                  {activeDiscountCode && (
+                    <span className="text-[11px] font-mono text-[#707777] line-through ml-2">
+                      De R$ 35,00
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="text-right">
@@ -362,6 +486,69 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
               </div>
             </div>
 
+            {/* OPÇÃO SOMENTE NO PLANO DE 35 MENSAL: Eu tenho código de desconto/ativação */}
+            {isMonthlyPlan && (
+              <div className="mb-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCouponInput(!showCouponInput);
+                    setCouponError('');
+                  }}
+                  className="w-full py-2 px-3 rounded-[8px] bg-[#002422] hover:bg-[#002e2b] border border-[#00827c]/60 hover:border-[#cbfffc] text-xs font-mono text-[#cbfffc] flex items-center justify-between transition-all cursor-pointer group"
+                >
+                  <span className="flex items-center gap-1.5 font-bold">
+                    <Tag className="w-3.5 h-3.5 text-[#ffd166] group-hover:rotate-12 transition-transform" />
+                    <span>Eu tenho código de desconto/ativação</span>
+                  </span>
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showCouponInput ? 'rotate-180 text-white' : 'text-[#707777]'}`} />
+                </button>
+
+                {showCouponInput && (
+                  <div className="mt-2 p-3 rounded-[10px] bg-[#011716] border border-[#00827c]/70 space-y-2 animate-in fade-in duration-150">
+                    <p className="text-[11px] font-mono text-[#bbc7c6]">
+                      Código de ativação de 30 dias (sem checkout) ou cupom de desconto de novo usuário:
+                    </p>
+
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={couponCodeInput}
+                        onChange={(e) => {
+                          setCouponCodeInput(e.target.value.toUpperCase());
+                          setCouponError('');
+                        }}
+                        placeholder="EX: ATIVAR30DIAS ou NOVO11"
+                        className="flex-1 px-3 py-2 rounded-[6px] bg-[#002523] border border-[#00827c]/50 text-xs font-mono text-white placeholder-[#707777] uppercase tracking-wider focus:outline-none focus:border-[#cbfffc]"
+                      />
+                      <button
+                        type="button"
+                        disabled={isValidatingCoupon || !couponCodeInput.trim()}
+                        onClick={handleApplyCouponInModal}
+                        className="px-3 py-2 rounded-[6px] bg-[#00827c] hover:bg-[#009e96] text-[#011d1c] font-bold text-xs font-mono uppercase tracking-wider transition-all disabled:opacity-40 cursor-pointer shrink-0 flex items-center gap-1"
+                      >
+                        {isValidatingCoupon ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Aplicar'}
+                      </button>
+                    </div>
+
+                    {couponError && (
+                      <div className="p-2 rounded-[6px] bg-rose-950/60 border border-rose-500/50 text-[11px] text-rose-300 font-mono flex items-start gap-1.5">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                        <span>{couponError}</span>
+                      </div>
+                    )}
+
+                    {couponSuccessMsg && (
+                      <div className="p-2 rounded-[6px] bg-emerald-950/60 border border-emerald-500/50 text-[11px] text-emerald-300 font-mono flex items-start gap-1.5">
+                        <Check className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                        <span>{couponSuccessMsg}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {errorMessage && (
               <div className="mb-4 p-3 rounded-[8px] bg-rose-950/40 border border-rose-600/40 text-rose-300 text-xs flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
@@ -369,7 +556,7 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
               </div>
             )}
 
-            <form onSubmit={handleGeneratePix} className="space-y-4">
+            <form onSubmit={handleFormSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-mono uppercase tracking-wider text-[#edfffe] mb-1.5">
                   Nome do Pagador
@@ -482,7 +669,7 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
                   ) : (
                     <>
                       <QrCode className="w-4 h-4" />
-                      <span>Pagar R$ {plan.price}</span>
+                      <span>Pagar R$ {currentPriceFormatted}</span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}
@@ -517,7 +704,7 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
             </div>
 
             <h3 className="text-xl font-medium text-[#ffffff] font-['DM_Sans',sans-serif]">
-              Pague R$ {plan.price} via PIX
+              Pague R$ {currentPriceFormatted} via PIX
             </h3>
             <p className="text-xs text-[#bbc7c6] mt-1 mb-4">
               Escaneie o QR Code com o app do seu banco ou utilize o código Copia e Cola.
@@ -613,7 +800,7 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
             </div>
 
             <p className="text-[10px] text-[#707777] font-mono mt-4">
-              O sistema verifica a cada 3 segundos. O crédito de +{plan.days} dias é aplicado automaticamente após a confirmação.
+              O sistema verifica a cada 3.5 segundos. O crédito de +{plan.days} dias é aplicado automaticamente após a confirmação.
             </p>
           </div>
         )}
@@ -627,14 +814,18 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
 
             <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-[#ffd166]/20 border border-[#ffd166]/40 text-[#ffd166] text-xs font-mono font-bold mb-2">
               <Sparkles className="w-3.5 h-3.5 text-[#ffd166]" />
-              PAGAMENTO CONFIRMADO COM SUCESSO!
+              {isDirectActivation ? 'CONTA ATIVADA COM SUCESSO!' : 'PAGAMENTO CONFIRMADO COM SUCESSO!'}
             </div>
 
             <h3 className="text-2xl font-bold text-[#ffffff] font-['DM_Sans',sans-serif] mt-1">
-              {plan.name} Ativado!
+              {isDirectActivation ? activationMsg : `${plan.name} Ativado!`}
             </h3>
             <p className="text-xs text-[#bbc7c6] mt-1 max-w-sm mx-auto">
-              Foram creditados com sucesso <strong className="text-[#cbfffc]">+{plan.days} dias de acesso irrestrito</strong> à sua conta no Shazam Buscas.
+              {isDirectActivation ? (
+                <span>Código de ativação aplicado com sucesso. Sua conta possui acesso completo liberado por 30 dias.</span>
+              ) : (
+                <span>Foram creditados com sucesso <strong className="text-[#cbfffc]">+{plan.days} dias de acesso irrestrito</strong> à sua conta no Shazam Buscas.</span>
+              )}
             </p>
 
             {/* Validity Information Box */}
@@ -647,9 +838,9 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
               </div>
 
               <div className="flex items-center justify-between border-b border-[#003734] pb-2.5">
-                <span className="text-xs text-[#707777] font-mono">Plano Contratado:</span>
+                <span className="text-xs text-[#707777] font-mono">Plano:</span>
                 <span className="text-xs font-mono font-medium text-[#ffffff]">
-                  {plan.name} (R$ {plan.price})
+                  {plan.name} {isDirectActivation ? '(Ativação por Código - 30 Dias)' : activeDiscountCode ? `(R$ ${currentPriceFormatted} - Desconto Aplicado)` : `(R$ ${plan.price})`}
                 </span>
               </div>
 
@@ -677,6 +868,18 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
           </div>
         )}
       </div>
+
+      {/* Modal Mandatório de Atenção com Código de Desconto */}
+      {activeDiscountCode && (
+        <DiscountAttentionModal
+          isOpen={showAttentionModal}
+          onClose={() => setShowAttentionModal(false)}
+          onConfirmPayment={handleConfirmDiscountPayment}
+          discountCode={activeDiscountCode}
+          originalPrice="35,00"
+          discountedPrice={currentPriceFormatted}
+        />
+      )}
     </div>
   );
 };

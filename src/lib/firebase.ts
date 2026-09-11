@@ -21,7 +21,8 @@ import {
   getDocs,
   serverTimestamp,
   updateDoc,
-  increment
+  increment,
+  onSnapshot
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -53,14 +54,28 @@ export interface UserPaymentRecord {
   qrCopyPaste?: string;
 }
 
+export const ADMIN_EMAILS = ['wrbatata6@gmail.com'];
+
+export function isUserAdmin(profile?: UserProfileData | null, email?: string | null): boolean {
+  if (email && ADMIN_EMAILS.includes(email.toLowerCase().trim())) return true;
+  if (profile?.email && ADMIN_EMAILS.includes(profile.email.toLowerCase().trim())) return true;
+  if (profile?.role === 'admin' || profile?.isAdmin || profile?.plan === 'lifetime') return true;
+  return false;
+}
+
 export interface UserProfileData {
   id: string;
   email: string;
   displayName: string;
   photoURL: string;
-  plan: 'premium' | 'weekly' | 'biweekly' | 'monthly' | 'free' | 'enterprise' | 'trial';
+  plan: 'premium' | 'weekly' | 'biweekly' | 'monthly' | 'free' | 'enterprise' | 'trial' | 'lifetime';
   planName?: string;
-  planStatus: 'trial' | 'active' | 'expired';
+  planStatus: 'trial' | 'active' | 'expired' | 'blocked';
+  role?: 'admin' | 'user' | 'reseller';
+  isAdmin?: boolean;
+  isBlocked?: boolean;
+  blockedReason?: string;
+  blockedAt?: string;
   trialStartedAt: string;
   trialEndsAt: string;
   validUntil: string;
@@ -70,6 +85,16 @@ export interface UserProfileData {
   createdAt: string;
   lastLoginAt: string;
   recentPayments?: UserPaymentRecord[];
+  latestNotification?: {
+    id: string;
+    title: string;
+    message: string;
+    type: 'info' | 'warning' | 'success' | 'urgent';
+    createdAt: string;
+    read: boolean;
+    sentBy?: string;
+  };
+  hasUnreadNotification?: boolean;
 }
 
 /**
@@ -79,6 +104,9 @@ export function calculateAccountValidity(profile?: UserProfileData | null): {
   isValid: boolean;
   isTrial: boolean;
   isExpired: boolean;
+  isQuotaExhausted?: boolean;
+  isLifetime: boolean;
+  isBlocked: boolean;
   statusText: string;
   daysRemaining: number;
   hoursRemaining: number;
@@ -91,12 +119,49 @@ export function calculateAccountValidity(profile?: UserProfileData | null): {
       isValid: false,
       isTrial: false,
       isExpired: true,
+      isLifetime: false,
+      isBlocked: false,
       statusText: 'Desconectado',
       daysRemaining: 0,
       hoursRemaining: 0,
       expirationDateFormatted: 'Não autenticado',
       expirationIso: '',
       planDisplayName: 'Sem plano',
+    };
+  }
+
+  const isAdmin = isUserAdmin(profile, profile.email);
+  const isBlocked = Boolean(profile.isBlocked || profile.planStatus === 'blocked' || profile.planStatus === 'expired');
+
+  if ((isBlocked || profile.planStatus === 'expired') && !isAdmin) {
+    return {
+      isValid: false,
+      isTrial: false,
+      isExpired: true,
+      isLifetime: false,
+      isBlocked: Boolean(profile.isBlocked || profile.planStatus === 'blocked'),
+      statusText: 'Expirado',
+      daysRemaining: 0,
+      hoursRemaining: 0,
+      expirationDateFormatted: 'Expirado',
+      expirationIso: '',
+      planDisplayName: profile.planName || 'Expirado',
+    };
+  }
+
+  if (isAdmin) {
+    return {
+      isValid: true,
+      isTrial: false,
+      isExpired: false,
+      isLifetime: true,
+      isBlocked: false,
+      statusText: 'Acesso Administrador Lifetime (Vitalício)',
+      daysRemaining: 99999,
+      hoursRemaining: 999999,
+      expirationDateFormatted: 'Eterno / Vitalício (Sem Expiração)',
+      expirationIso: '2099-12-31T23:59:59.999Z',
+      planDisplayName: 'Administrador Lifetime Eterno',
     };
   }
 
@@ -107,7 +172,11 @@ export function calculateAccountValidity(profile?: UserProfileData | null): {
   const targetDate = isValidDate ? expiryDate : new Date(now.getTime() + 24 * 3600000);
 
   const diffMs = targetDate.getTime() - now.getTime();
-  const isExpired = diffMs <= 0;
+  const isTimeExpired = diffMs <= 0;
+  const isQuotaExhausted = profile.plan === 'trial' && profile.consultasRestantes !== undefined && profile.consultasRestantes <= 0;
+  const isExplicitlyExpired = profile.planStatus === 'expired';
+  
+  const isExpired = isTimeExpired || isExplicitlyExpired || isQuotaExhausted;
   const daysRemaining = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
   const hoursRemaining = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60)));
   const minutesRemaining = Math.max(0, Math.ceil(diffMs / (1000 * 60)));
@@ -144,6 +213,9 @@ export function calculateAccountValidity(profile?: UserProfileData | null): {
     isValid: !isExpired,
     isTrial,
     isExpired,
+    isQuotaExhausted: Boolean(isQuotaExhausted),
+    isLifetime: false,
+    isBlocked: false,
     statusText,
     daysRemaining,
     hoursRemaining,
@@ -161,6 +233,7 @@ export async function syncUserProfile(user: User): Promise<UserProfileData> {
   const now = new Date();
   const nowIso = now.toISOString();
   const trialDurationMs = 24 * 60 * 60 * 1000; // 24 horas
+  const isAdmin = isUserAdmin(null, user.email);
 
   try {
     const docSnap = await getDoc(userRef);
@@ -168,45 +241,71 @@ export async function syncUserProfile(user: User): Promise<UserProfileData> {
     if (docSnap.exists()) {
       const existing = docSnap.data() as Partial<UserProfileData>;
       
-      const trialEndsAt = existing.validUntil || existing.trialEndsAt || new Date(now.getTime() + trialDurationMs).toISOString();
+      const trialEndsAt = isAdmin 
+        ? '2099-12-31T23:59:59.999Z'
+        : (existing.validUntil || existing.trialEndsAt || new Date(now.getTime() + trialDurationMs).toISOString());
+
       const updatedProfile: UserProfileData = {
         id: user.uid,
         email: user.email || existing.email || '',
-        displayName: user.displayName || existing.displayName || 'Operador',
+        displayName: user.displayName || existing.displayName || (isAdmin ? 'Administrador' : 'Operador'),
         photoURL: user.photoURL || existing.photoURL || '',
-        plan: existing.plan || 'trial',
-        planName: existing.plan === 'trial' ? 'Teste Grátis (24 Horas)' : (existing.planName || 'Plano Shazam Premium'),
-        planStatus: existing.planStatus || 'trial',
+        plan: isAdmin ? 'lifetime' : (existing.plan || 'trial'),
+        planName: isAdmin ? 'Administrador Lifetime Eterno' : (existing.plan === 'trial' ? 'Teste Grátis (24 Horas)' : (existing.planName || 'Plano Shazam Premium')),
+        planStatus: isAdmin ? 'active' : (existing.planStatus || 'trial'),
+        role: isAdmin ? 'admin' : (existing.role || 'user'),
+        isAdmin: isAdmin ? true : Boolean(existing.isAdmin),
+        isBlocked: isAdmin ? false : Boolean(existing.isBlocked),
+        blockedReason: existing.blockedReason,
+        blockedAt: existing.blockedAt,
         trialStartedAt: existing.trialStartedAt || nowIso,
         trialEndsAt: trialEndsAt,
-        validUntil: existing.validUntil || trialEndsAt,
-        trialDaysTotal: 1,
+        validUntil: isAdmin ? '2099-12-31T23:59:59.999Z' : (existing.validUntil || trialEndsAt),
+        trialDaysTotal: isAdmin ? 99999 : 1,
         totalDaysCredited: existing.totalDaysCredited || 0,
-        consultasRestantes: existing.consultasRestantes !== undefined ? existing.consultasRestantes : 999,
+        consultasRestantes: isAdmin ? 999999 : (existing.consultasRestantes !== undefined ? existing.consultasRestantes : 999),
         createdAt: existing.createdAt || nowIso,
         lastLoginAt: nowIso,
         recentPayments: existing.recentPayments || [],
+        latestNotification: existing.latestNotification,
+        hasUnreadNotification: existing.hasUnreadNotification,
       };
 
-      await setDoc(userRef, { lastLoginAt: nowIso }, { merge: true });
+      await setDoc(userRef, {
+        lastLoginAt: nowIso,
+        ...(isAdmin ? {
+          plan: 'lifetime',
+          planName: 'Administrador Lifetime Eterno',
+          planStatus: 'active',
+          role: 'admin',
+          isAdmin: true,
+          isBlocked: false,
+          validUntil: '2099-12-31T23:59:59.999Z',
+          trialEndsAt: '2099-12-31T23:59:59.999Z',
+          consultasRestantes: 999999,
+        } : {})
+      }, { merge: true });
       return updatedProfile;
     } else {
-      // Novo cliente cadastrado com o Google: ganha Teste Gratuito de 24 Horas
-      const trialExpiration = new Date(now.getTime() + trialDurationMs).toISOString();
+      // Novo cliente cadastrado com o Google: se for admin recebe Lifetime direto, senão Teste Gratuito de 24 Horas
+      const trialExpiration = isAdmin ? '2099-12-31T23:59:59.999Z' : new Date(now.getTime() + trialDurationMs).toISOString();
       const newProfile: UserProfileData = {
         id: user.uid,
         email: user.email || '',
-        displayName: user.displayName || 'Operador',
+        displayName: user.displayName || (isAdmin ? 'Administrador' : 'Operador'),
         photoURL: user.photoURL || '',
-        plan: 'trial',
-        planName: 'Teste Grátis (24 Horas)',
-        planStatus: 'trial',
+        plan: isAdmin ? 'lifetime' : 'trial',
+        planName: isAdmin ? 'Administrador Lifetime Eterno' : 'Teste Grátis (24 Horas)',
+        planStatus: 'active',
+        role: isAdmin ? 'admin' : 'user',
+        isAdmin: isAdmin ? true : false,
+        isBlocked: false,
         trialStartedAt: nowIso,
         trialEndsAt: trialExpiration,
         validUntil: trialExpiration,
-        trialDaysTotal: 1,
+        trialDaysTotal: isAdmin ? 99999 : 1,
         totalDaysCredited: 0,
-        consultasRestantes: 999, // Acesso completo durante o teste de 24h
+        consultasRestantes: isAdmin ? 999999 : 999,
         createdAt: nowIso,
         lastLoginAt: nowIso,
         recentPayments: [],
@@ -217,25 +316,60 @@ export async function syncUserProfile(user: User): Promise<UserProfileData> {
     }
   } catch (err) {
     console.warn('[Firebase] Erro ao sincronizar perfil do usuário no Firestore:', err);
-    const trialExpiration = new Date(now.getTime() + trialDurationMs).toISOString();
+    const trialExpiration = isAdmin ? '2099-12-31T23:59:59.999Z' : new Date(now.getTime() + trialDurationMs).toISOString();
     return {
       id: user.uid,
       email: user.email || '',
-      displayName: user.displayName || 'Operador',
+      displayName: user.displayName || (isAdmin ? 'Administrador' : 'Operador'),
       photoURL: user.photoURL || '',
-      plan: 'trial',
-      planName: 'Teste Grátis (24 Horas)',
-      planStatus: 'trial',
+      plan: isAdmin ? 'lifetime' : 'trial',
+      planName: isAdmin ? 'Administrador Lifetime Eterno' : 'Teste Grátis (24 Horas)',
+      planStatus: 'active',
+      role: isAdmin ? 'admin' : 'user',
+      isAdmin: isAdmin ? true : false,
+      isBlocked: false,
       trialStartedAt: nowIso,
       trialEndsAt: trialExpiration,
       validUntil: trialExpiration,
-      trialDaysTotal: 1,
+      trialDaysTotal: isAdmin ? 99999 : 1,
       totalDaysCredited: 0,
-      consultasRestantes: 999,
+      consultasRestantes: isAdmin ? 999999 : 999,
       createdAt: nowIso,
       lastLoginAt: nowIso,
       recentPayments: [],
     };
+  }
+}
+
+/**
+ * Escuta em tempo real atualizações do perfil do usuário no Firestore (bloqueios, planos, notificações)
+ */
+export function subscribeUserProfile(
+  userId: string, 
+  onUpdate: (profile: UserProfileData) => void
+): () => void {
+  const userRef = doc(db, 'users', userId);
+  return onSnapshot(userRef, (snapshot) => {
+    if (snapshot.exists()) {
+      const data = snapshot.data() as UserProfileData;
+      onUpdate({ ...data, id: snapshot.id });
+    }
+  }, (err) => {
+    console.warn('[Firestore] Erro no listener em tempo real do perfil:', err);
+  });
+}
+
+/**
+ * Marca notificação do usuário como lida
+ */
+export async function markNotificationAsRead(userId: string): Promise<void> {
+  try {
+    const userRef = doc(db, 'users', userId);
+    await updateDoc(userRef, {
+      hasUnreadNotification: false,
+    });
+  } catch (err) {
+    console.warn('[Firestore] Erro ao marcar notificação como lida:', err);
   }
 }
 
@@ -448,6 +582,7 @@ export function onAuthUserChanged(callback: (user: User | null) => void) {
 
 /**
  * Persist consultation into Firestore under global 'consultas' and user-specific collection
+ * Includes full details: research parameters, complete raw result, timestamp, and client IP
  */
 export async function saveConsultaToFirestore(consulta: {
   parametro: string;
@@ -457,36 +592,50 @@ export async function saveConsultaToFirestore(consulta: {
   tempo_resposta_ms?: number | null;
   resultado_resumo?: string | null;
   resposta_bruta?: string | null;
+  resultado_completo?: string | null;
   telegram_msg_id?: number | string | null;
-}, user: User | null) {
-  if (!user) return null;
-
+  ip?: string | null;
+  client_ip?: string | null;
+}, user: User | null | { uid: string; email?: string | null; displayName?: string | null }) {
   try {
+    const ipAddress = consulta.ip || consulta.client_ip || '127.0.0.1';
+    const fullResult = consulta.resultado_completo || consulta.resposta_bruta || consulta.resultado_resumo || '';
+    const userId = user?.uid || 'guest_user';
+    const userEmail = user?.email || 'cliente@shazam.terminal';
+    const userName = user?.displayName || 'Operador Shazam';
+    const userPhotoURL = (user as any)?.photoURL || '';
+
     const consultaPayload = {
-      userId: user.uid,
-      userEmail: user.email || '',
-      userName: user.displayName || 'Operador',
+      userId,
+      userEmail,
+      userName,
+      userPhotoURL,
       parametro: consulta.parametro,
       modulo: consulta.modulo,
       modulo_titulo: consulta.modulo_titulo,
-      status: consulta.status,
+      status: consulta.status || 'concluida',
       timestamp: new Date().toISOString(),
       serverTimestamp: serverTimestamp(),
       tempo_resposta_ms: consulta.tempo_resposta_ms || 0,
-      resultado_resumo: consulta.resultado_resumo || '',
-      resposta_bruta: consulta.resposta_bruta || '',
+      resultado_resumo: consulta.resultado_resumo || (fullResult ? fullResult.slice(0, 300) : ''),
+      resposta_bruta: consulta.resposta_bruta || fullResult,
+      resultado_completo: fullResult,
       telegram_msg_id: consulta.telegram_msg_id || null,
+      ip: ipAddress,
+      client_ip: ipAddress,
     };
 
     const docRef = await addDoc(collection(db, 'consultas'), consultaPayload);
 
-    try {
-      await addDoc(collection(db, 'users', user.uid, 'consultas'), {
-        ...consultaPayload,
-        consultaId: docRef.id,
-      });
-    } catch (subErr) {
-      console.warn('[Firestore] Subcoleção do usuário não gravada:', subErr);
+    if (user?.uid) {
+      try {
+        await addDoc(collection(db, 'users', user.uid, 'consultas'), {
+          ...consultaPayload,
+          consultaId: docRef.id,
+        });
+      } catch (subErr) {
+        console.warn('[Firestore] Subcoleção do usuário não gravada:', subErr);
+      }
     }
 
     return docRef.id;

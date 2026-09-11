@@ -67,6 +67,55 @@
         "estimatedPaymentTime": "string",
         "completedAt": "string"
       }
+    },
+    "CouponRecord": {
+      "collection": "coupons",
+      "fields": {
+        "id": "string",
+        "code": "string",
+        "type": "string",
+        "planTarget": "string",
+        "originalPrice": "number",
+        "discountedPrice": "number",
+        "days": "number",
+        "used": "boolean",
+        "usedByUserId": "string",
+        "usedByEmail": "string",
+        "usedAt": "string",
+        "createdAt": "string"
+      }
+    },
+    "NotificationRecord": {
+      "collection": "notifications",
+      "fields": {
+        "id": "string",
+        "targetUserId": "string",
+        "targetUserEmail": "string",
+        "title": "string",
+        "message": "string",
+        "imageUrl": "string",
+        "linkUrl": "string",
+        "type": "string",
+        "read": "boolean",
+        "createdAt": "string",
+        "sentBy": "string"
+      }
+    },
+    "PushCampaign": {
+      "collection": "push_campaigns",
+      "fields": {
+        "id": "string",
+        "name": "string",
+        "title": "string",
+        "message": "string",
+        "imageUrl": "string",
+        "linkUrl": "string",
+        "filter": "string",
+        "targetCount": "number",
+        "deliveredCount": "number",
+        "createdAt": "string",
+        "sentBy": "string"
+      }
     }
   }
 }

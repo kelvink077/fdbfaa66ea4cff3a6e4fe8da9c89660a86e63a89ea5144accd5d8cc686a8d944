@@ -43,8 +43,15 @@ export function applyInputMask(value: string, moduleType: QueryModuleType): stri
       return value.toUpperCase();
     case 'email':
       return value.toLowerCase().trim();
-    default:
+    case 'cep':
+    default: {
+      if (String(moduleType).includes('cep')) {
+        const numbers = value.replace(/\D/g, '').slice(0, 8);
+        if (numbers.length <= 5) return numbers;
+        return `${numbers.slice(0, 5)}-${numbers.slice(5)}`;
+      }
       return value;
+    }
   }
 }
 
@@ -54,6 +61,15 @@ export function validateInput(value: string, moduleType: QueryModuleType): { isV
   }
 
   const cleanVal = value.trim();
+
+  // Validação de CEP
+  if (String(moduleType).includes('cep')) {
+    const digits = cleanVal.replace(/\D/g, '');
+    if (digits.length !== 8) {
+      return { isValid: false, message: 'CEP deve conter exatamente 8 dígitos numéricos.' };
+    }
+    return { isValid: true };
+  }
 
   switch (moduleType) {
     case 'cpf_1':

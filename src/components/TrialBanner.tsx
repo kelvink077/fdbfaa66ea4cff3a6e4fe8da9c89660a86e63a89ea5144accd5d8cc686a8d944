@@ -38,7 +38,7 @@ export const TrialBanner: React.FC<TrialBannerProps> = ({
   const validity = calculateAccountValidity(userProfile);
   
   const isTrial = userProfile?.plan === 'trial';
-  const isTrialExhausted = isTrial && validity.isExpired;
+  const isAccountExpired = validity.isExpired || !validity.isValid || userProfile?.planStatus === 'expired';
 
   if (isDismissed) {
     return (
@@ -47,7 +47,9 @@ export const TrialBanner: React.FC<TrialBannerProps> = ({
           <Crown className="w-3.5 h-3.5 text-[#ffd166]" />
           <span>
             {currentUser 
-              ? (isTrial 
+              ? (isAccountExpired
+                  ? '⚠️ O seu plano está expirado. Contrate um plano para continuar realizando consultas.'
+                  : isTrial 
                   ? `Teste Grátis (24h): ${validity.isValid ? (validity.hoursRemaining > 1 ? `${validity.hoursRemaining} horas restantes` : `${validity.hoursRemaining === 1 ? '1 hora restante' : 'menos de 1 hora restante'}`) : 'Expirado'}` 
                   : `${validity.planDisplayName}: ${validity.daysRemaining} dias de acesso restantes (Válido até ${validity.expirationDateFormatted})`)
               : 'Novos clientes: Cadastre-se com o Google e ganhe teste gratuito de 24 horas no Plano Premium!'}
@@ -77,27 +79,29 @@ export const TrialBanner: React.FC<TrialBannerProps> = ({
   // USUÁRIO AUTENTICADO
   // =========================================================
   if (currentUser) {
-    // CENÁRIO 1: TESTE GRÁTIS ESGOTADO (Banner Vermelho de Bloqueio)
-    if (isTrialExhausted) {
+    // CENÁRIO 1: CONTA EXPIRADA (Banner de Bloqueio em Vermelho com Ação Imediata)
+    if (isAccountExpired) {
       return (
         <aside 
-          className="relative bg-gradient-to-r from-rose-950 via-rose-900 to-rose-950 border-b border-rose-500/40 text-rose-100 px-4 sm:px-6 py-2.5 z-40 shadow-sm animate-in fade-in slide-in-from-top-2"
+          className="relative bg-gradient-to-r from-[#450a0a] via-[#7f1d1d] to-[#450a0a] border-b border-[#ef4444]/60 text-white px-4 sm:px-6 py-2.5 z-40 shadow-lg animate-in fade-in slide-in-from-top-2"
         >
           <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-              <span className="text-sm font-medium tracking-tight">
-                Seu teste gratuito de 24 horas encerrou. Faça o upgrade para continuar usando o motor de buscas Shazam.
+              <div className="w-7 h-7 rounded-full bg-[#ef4444]/30 border border-[#ef4444] flex items-center justify-center shrink-0 text-[#ffd166]">
+                <AlertTriangle className="w-4 h-4 animate-pulse text-[#ffd166]" />
+              </div>
+              <span className="text-xs sm:text-sm font-semibold tracking-tight text-[#ffffff]">
+                <strong className="text-[#ffd166]">O seu plano está expirado!</strong> Contrate um plano para continuar realizando consultas e emitindo dossiês.
               </span>
             </div>
             <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
               {onOpenPricing && (
                 <button 
                   onClick={onOpenPricing} 
-                  className="flex items-center gap-1.5 text-xs bg-rose-500 hover:bg-rose-400 text-white px-4 py-1.5 rounded-[6px] font-bold tracking-wide uppercase transition-colors cursor-pointer shadow-md"
+                  className="flex items-center gap-1.5 text-xs bg-gradient-to-r from-[#ffd166] to-[#f59e0b] hover:brightness-110 text-[#012624] px-4 py-1.5 rounded-[6px] font-bold tracking-wide uppercase transition-all cursor-pointer shadow-md"
                 >
                   <Crown className="w-3.5 h-3.5" />
-                  <span>Liberar Acesso Ilimitado</span>
+                  <span>Contratar Plano para Continuar</span>
                 </button>
               )}
             </div>

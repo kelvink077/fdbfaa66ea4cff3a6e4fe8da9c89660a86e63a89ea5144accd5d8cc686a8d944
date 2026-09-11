@@ -10,6 +10,8 @@ export type QueryModuleType =
   | 'email'
   | 'placa'
   | 'telefone'
+  | 'cep'
+  | 'endereco'
   | 'pro_cpf'
   | 'pro_telefone'
   | 'pro_nome'
@@ -22,6 +24,48 @@ export type QueryModuleType =
   | 'pro_foto'
   | 'pro_placa'
   | (string & {});
+
+export interface CepResident {
+  id: string;
+  name: string;
+  cpf: string;
+  cpfClean: string;
+  propertyNumber: string;
+  unitOrComplement?: string;
+  role: 'Proprietário' | 'Locatário / Inquilino' | 'Cônjuge' | 'Dependente' | 'Responsável' | 'Residente KREX';
+  age: number;
+  birthDate: string;
+  incomePresumed: string;
+  creditScore: number;
+  phones: Array<{ number: string; operator: string; whatsapp: boolean; type: string }>;
+  status: string;
+  hasDeepDossier?: boolean;
+  deepDossier?: DeepPersonDossier;
+}
+
+export interface DeepPersonDossier {
+  id: string;
+  personName: string;
+  cpf: string;
+  rg: string;
+  birthDate: string;
+  age: number;
+  motherName: string;
+  fatherName: string;
+  statusReceita: string;
+  creditScore: number;
+  scoreClassification: string;
+  incomePresumed: string;
+  occupation: string;
+  phones: Array<{ number: string; operator: string; whatsapp: boolean; type: string }>;
+  emails: string[];
+  vehicles: Array<{ plate: string; model: string; year: number; color: string; renavam: string; status: string }>;
+  companies: Array<{ cnpj: string; name: string; role: string; status: string; capital: string }>;
+  judicialRecords: Array<{ court: string; processNumber: string; subject: string; status: string }>;
+  addressHistory: string[];
+  notes: string;
+  compiledAt: string;
+}
 
 export interface QueryModuleInfo {
   id: QueryModuleType;

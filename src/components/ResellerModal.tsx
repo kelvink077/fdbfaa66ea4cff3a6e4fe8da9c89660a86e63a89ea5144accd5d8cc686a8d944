@@ -158,27 +158,25 @@ export const ResellerModal: React.FC<ResellerModalProps> = ({
 
     setIsSubmittingWithdrawal(true);
     try {
-      const result = await requestWithdrawalOrder(
-        currentUser.uid,
-        currentUser.email || '',
-        resellerCode,
-        {
-          amount: amountNum,
-          pixKeyType,
-          pixKey: pixKey.trim(),
-          accountHolder: accountHolder.trim() || currentUser.displayName || 'Titular',
-        }
-      );
+      const order = await requestWithdrawalOrder({
+        resellerId: currentUser.uid,
+        resellerEmail: currentUser.email || '',
+        resellerName: currentUser.displayName || resellerCode,
+        amount: amountNum,
+        pixKeyType,
+        pixKey: pixKey.trim(),
+        accountHolder: accountHolder.trim() || currentUser.displayName || 'Titular',
+      });
 
-      if (result.success && result.order) {
+      if (order && order.id) {
         setWithdrawSuccess(
-          `Ordem de saque nº ${result.order.id} emitida com sucesso! O pagamento tem até 24 horas no prazo médio para ser creditado na sua chave PIX.`
+          `Ordem de saque nº ${order.id} emitida com sucesso! O pagamento tem até 24 horas no prazo médio para ser creditado na sua chave PIX.`
         );
         setWithdrawalAmount('');
         // Recarrega os dados imediatamente
         await loadData(true);
       } else {
-        setWithdrawError(result.error || 'Falha ao processar ordem de saque.');
+        setWithdrawError('Falha ao processar ordem de saque.');
       }
     } catch (err: any) {
       setWithdrawError(err?.message || 'Erro ao registrar ordem de saque.');
@@ -193,9 +191,11 @@ export const ResellerModal: React.FC<ResellerModalProps> = ({
     if (!simName.trim() || !simEmail.trim()) return;
 
     const uid = currentUser?.uid || 'guest_operator';
-    await createSimulatedReferral(uid, resellerCode, {
-      name: simName.trim(),
-      email: simEmail.trim(),
+    await createSimulatedReferral({
+      resellerId: uid,
+      resellerCode,
+      referredName: simName.trim(),
+      referredEmail: simEmail.trim(),
       isPaid: simIsPaid,
       planId: simPlan,
     });

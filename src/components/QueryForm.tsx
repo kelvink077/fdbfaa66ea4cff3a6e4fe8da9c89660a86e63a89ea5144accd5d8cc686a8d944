@@ -7,7 +7,11 @@ import {
   Clock, 
   ArrowUpRight,
   Sparkles,
-  Bot
+  Bot,
+  Users,
+  AlertTriangle,
+  Lock,
+  Crown
 } from 'lucide-react';
 import { QueryModuleInfo, QueryModuleType } from '../types';
 import { applyInputMask, validateInput } from '../utils/masks';
@@ -20,6 +24,9 @@ interface QueryFormProps {
   isProMode?: boolean;
   onToggleProMode?: (isPro: boolean) => void;
   cooldownSeconds?: number;
+  onOpenCepScan?: (cep?: string) => void;
+  isAccountExpired?: boolean;
+  onOpenExpiredModal?: () => void;
 }
 
 export const QueryForm: React.FC<QueryFormProps> = ({
@@ -29,6 +36,9 @@ export const QueryForm: React.FC<QueryFormProps> = ({
   isProMode = false,
   onToggleProMode,
   cooldownSeconds = 0,
+  onOpenCepScan,
+  isAccountExpired = false,
+  onOpenExpiredModal,
 }) => {
   const [inputValue, setInputValue] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -53,6 +63,10 @@ export const QueryForm: React.FC<QueryFormProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isAccountExpired) {
+      onOpenExpiredModal?.();
+      return;
+    }
     if (cooldownSeconds > 0) {
       setErrorMessage(`Aguarde ${cooldownSeconds} segundo${cooldownSeconds !== 1 ? 's' : ''} para realizar uma nova consulta.`);
       return;
@@ -161,6 +175,46 @@ export const QueryForm: React.FC<QueryFormProps> = ({
         </button>
       </div>
 
+      {/* Banner Informativo de Plano Expirado */}
+      {isAccountExpired && (
+        <div 
+          id="expired-plan-warning-banner"
+          onClick={onOpenExpiredModal}
+          className="p-3.5 sm:p-4 rounded-[12px] bg-[#ef4444]/15 border border-[#ef4444]/50 text-[#ffffff] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg shadow-[#ef4444]/10 cursor-pointer hover:bg-[#ef4444]/20 transition-all animate-in fade-in slide-in-from-top-2 duration-200"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-[#ef4444]/20 border border-[#ef4444]/50 flex items-center justify-center shrink-0 text-[#ef4444]">
+              <AlertTriangle className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs sm:text-sm font-bold text-[#ffd166] font-['DM_Sans',sans-serif]">
+                  O seu plano está expirado
+                </span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#ef4444]/30 text-[#ff8888] font-mono font-bold">
+                  CONSULTAS BLOQUEADAS
+                </span>
+              </div>
+              <p className="text-[11px] sm:text-xs text-[#edfffe] mt-0.5">
+                Contrate um plano para continuar realizando consultas no sistema.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenExpiredModal?.();
+            }}
+            className="w-full sm:w-auto px-4 py-2 rounded-[6px] bg-gradient-to-r from-[#ffd166] to-[#f59e0b] hover:opacity-95 text-[#012624] text-xs font-mono font-bold uppercase tracking-wider shrink-0 transition-opacity flex items-center justify-center gap-1.5 shadow cursor-pointer"
+          >
+            <Crown className="w-3.5 h-3.5 text-[#012624]" />
+            <span>Contratar Plano</span>
+          </button>
+        </div>
+      )}
+
       {/* Banner Informativo de Cooldown (15 Segundos Obrigatórios) */}
       {cooldownSeconds > 0 && (
         <div className="p-3.5 sm:p-4 rounded-[12px] bg-[#011d1c] border border-[#ffd166]/50 text-[#ffd166] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg shadow-[#ffd166]/5 animate-in fade-in slide-in-from-top-2 duration-200">
@@ -223,14 +277,20 @@ export const QueryForm: React.FC<QueryFormProps> = ({
           <button
             type="submit"
             id="btn-submit-search"
-            disabled={isLoading || !inputValue || cooldownSeconds > 0}
+            disabled={isLoading || (!isAccountExpired && !inputValue) || (!isAccountExpired && cooldownSeconds > 0)}
             title={
-              cooldownSeconds > 0
+              isAccountExpired
+                ? 'Seu plano está expirado. Clique para contratar um plano.'
+                : cooldownSeconds > 0
                 ? `Aguarde ${cooldownSeconds} segundos para realizar uma nova consulta.`
                 : undefined
             }
             className={`absolute right-1.5 sm:right-2.5 top-1.5 sm:top-2.5 bottom-1.5 sm:bottom-2.5 px-3.5 sm:px-8 rounded-[6px] flex items-center justify-center gap-1.5 sm:gap-2 transition-all text-xs sm:text-sm font-medium uppercase tracking-[0.08em] ${
-              isLoading || !inputValue
+              isLoading
+                ? 'bg-[#003734] text-[#707777] cursor-not-allowed border border-[#707777]/20'
+                : isAccountExpired
+                ? 'bg-[#011d1c] border-2 border-[#ef4444] text-[#ef4444] hover:bg-[#ef4444]/20 cursor-pointer shadow-lg shadow-[#ef4444]/15 animate-pulse'
+                : !inputValue
                 ? 'bg-[#003734] text-[#707777] cursor-not-allowed border border-[#707777]/20'
                 : cooldownSeconds > 0
                 ? 'bg-[#003734] border border-[#ffd166]/40 text-[#ffd166] cursor-not-allowed shadow-inner'
@@ -244,6 +304,12 @@ export const QueryForm: React.FC<QueryFormProps> = ({
                 <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin text-[#012624]" />
                 <span className="hidden sm:inline">PROCESSANDO</span>
                 <span className="sm:hidden text-[11px]">BUSCANDO</span>
+              </>
+            ) : isAccountExpired ? (
+              <>
+                <Lock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#ef4444]" />
+                <span className="hidden sm:inline text-[#ef4444] font-bold">PLANO EXPIRADO</span>
+                <span className="sm:hidden text-[11px] text-[#ef4444] font-bold">EXPIRADO</span>
               </>
             ) : cooldownSeconds > 0 ? (
               <>
@@ -288,6 +354,33 @@ export const QueryForm: React.FC<QueryFormProps> = ({
             <span className="text-[#edfffe] font-medium">~1.5s</span>
           </div>
         </div>
+
+        {/* CEP Residents Sweep Special Banner */}
+        {moduleInfo.id === 'cep' && onOpenCepScan && (
+          <div className="mt-3 p-3 rounded-[8px] bg-gradient-to-r from-[#002b28] to-[#011d1c] border border-[#00827c] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-lg bg-[#00827c]/20 border border-[#79fbf5]/40 flex items-center justify-center shrink-0">
+                <Users className="w-4 h-4 text-[#79fbf5]" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-[#cbfffc] font-mono tracking-wide">
+                  VARREDURA COMPLETA DE MORADORES POR CEP
+                </p>
+                <p className="text-[11px] text-[#8ea3a1] leading-tight">
+                  Cruza todos os módulos que suportam CEP (busca inicial de até 1 min) e dossiê minucioso individual com acompanhamento passo a passo (até 7 min).
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => onOpenCepScan(inputValue || undefined)}
+              className="px-3.5 py-2 rounded-[6px] bg-gradient-to-r from-[#00827c] to-[#00a89f] hover:from-[#009b93] hover:to-[#00a89f] text-white font-mono font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-md shadow-[#00827c]/20 cursor-pointer shrink-0 transition-all hover:scale-[1.02]"
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>INICIAR VARREDURA</span>
+            </button>
+          </div>
+        )}
       </form>
     </div>
   );

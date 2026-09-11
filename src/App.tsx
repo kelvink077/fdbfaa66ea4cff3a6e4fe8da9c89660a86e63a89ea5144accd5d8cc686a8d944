@@ -9,7 +9,6 @@ import { SetupInstructionsModal } from './components/SetupInstructionsModal';
 import { SourceCodeViewerModal } from './components/SourceCodeViewerModal';
 import { QueryHistoryList } from './components/QueryHistoryList';
 import { ParticleSphereVisual } from './components/ParticleSphereVisual';
-import { TrialBanner } from './components/TrialBanner';
 import { PricingModal } from './components/PricingModal';
 import { UserProfileModal } from './components/UserProfileModal';
 import { PixCheckoutModal } from './components/PixCheckoutModal';
@@ -18,6 +17,8 @@ import { captureReferralCodeFromUrl, trackNewUserReferral } from './lib/reseller
 import { AuthErrorModal, AuthErrorDetails } from './components/AuthErrorModal';
 import { ProSearchModal } from './components/ProSearchModal';
 import { ZyrexSearchModal } from './components/ZyrexSearchModal';
+import { SmartMapsModal } from './components/SmartMapsModal';
+import { CepIntelligenceModal } from './components/CepIntelligenceModal';
 import { 
   QueryModuleType, 
   QueryRecord, 
@@ -39,15 +40,26 @@ import {
   fetchUserHistoryFromFirestore,
   createGuestOperatorUser,
   UserProfileData,
-  deduzirConsulta // <--- Importação adicionada
+  deduzirConsulta,
+  calculateAccountValidity,
+  subscribeUserProfile,
+  markNotificationAsRead
 } from './lib/firebase';
+import { ExpiredPlanModal } from './components/ExpiredPlanModal';
+import { AdminDashboardModal } from './components/AdminDashboardModal';
+import { NotificationPermissionModal } from './components/NotificationPermissionModal';
+import { playWebPushChime, triggerNativeWebPush } from './lib/pushNotificationService';
 import { 
   CheckCircle2, 
   Radio,
   FileCode,
   Zap,
   Clock,
-  X
+  X,
+  Bell,
+  Lock,
+  AlertTriangle,
+  ExternalLink
 } from 'lucide-react';
 
 export default function App() {
@@ -128,9 +140,82 @@ export default function App() {
   const [isPixModalOpen, setIsPixModalOpen] = useState(false);
   const [isProModalOpen, setIsProModalOpen] = useState(false);
   const [isZyrexModalOpen, setIsZyrexModalOpen] = useState(false);
+  const [isSmartMapsOpen, setIsSmartMapsOpen] = useState(false);
+  const [isCepScanOpen, setIsCepScanOpen] = useState(false);
+  const [cepScanTarget, setCepScanTarget] = useState<string | undefined>(undefined);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProMode, setIsProMode] = useState(false);
   const [selectedPlanForPix, setSelectedPlanForPix] = useState<'weekly' | 'biweekly' | 'monthly'>('monthly');
+  const [pixDiscountCode, setPixDiscountCode] = useState<string | undefined>(undefined);
+  const [pixDiscountedPrice, setPixDiscountedPrice] = useState<number | undefined>(undefined);
+  const [isExpiredPlanModalOpen, setIsExpiredPlanModalOpen] = useState(false);
+  const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState(false);
+
+  // Checagem central de validade de conta e plano expirado
+  const accountValidity = calculateAccountValidity(userProfile);
+  const isAdminUser = Boolean(
+    (currentUser?.email && ['wrbatata6@gmail.com'].includes(currentUser.email.toLowerCase())) ||
+    userProfile?.role === 'admin' ||
+    userProfile?.plan === 'lifetime' ||
+    accountValidity.isLifetime
+  );
+  const isUserBlocked = !isAdminUser && Boolean(
+    userProfile?.isBlocked || userProfile?.planStatus === 'blocked'
+  );
+  const isAccountExpired = !isAdminUser && (
+    accountValidity.isExpired || 
+    userProfile?.planStatus === 'expired' || 
+    !accountValidity.isValid
+  );
+
+  // Sistema de Notificações Recebidas da Administração
+  const [dismissedNotificationId, setDismissedNotificationId] = useState<string | null>(null);
+
+  const activeNotification = useMemo(() => {
+    if (!userProfile?.latestNotification) return null;
+    if (!userProfile.hasUnreadNotification) return null;
+    if (dismissedNotificationId === userProfile.latestNotification.id) return null;
+    return userProfile.latestNotification;
+  }, [userProfile, dismissedNotificationId]);
+
+  const handleDismissNotification = async () => {
+    if (userProfile?.latestNotification?.id) {
+      setDismissedNotificationId(userProfile.latestNotification.id);
+    }
+    if (currentUser?.uid) {
+      await markNotificationAsRead(currentUser.uid);
+    }
+  };
+
+  // Dispara áudio e notificação nativa do sistema quando receber WebPush
+  useEffect(() => {
+    if (activeNotification && !isUserBlocked) {
+      playWebPushChime();
+      triggerNativeWebPush({
+        title: activeNotification.title,
+        message: activeNotification.message,
+        imageUrl: activeNotification.imageUrl,
+        linkUrl: activeNotification.linkUrl,
+      });
+    }
+  }, [activeNotification?.id, isUserBlocked]);
+
+  // Prompt de Permissão de Notificações WebPush (logo após login com Google)
+  const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
+
+  useEffect(() => {
+    if (currentUser && userProfile) {
+      const isGranted = typeof Notification !== 'undefined' && Notification.permission === 'granted';
+      const isDeclinedSession = sessionStorage.getItem('shazam_push_prompt_dismissed') === 'true';
+
+      if (!isGranted && !isDeclinedSession) {
+        const timer = setTimeout(() => {
+          setShowNotificationPrompt(true);
+        }, 1200);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [currentUser?.uid, userProfile?.notificationsEnabled]);
 
   // Captura código de indicação do revendedor na URL (?ref=CODIGO) ao carregar
   useEffect(() => {
@@ -145,6 +230,10 @@ export default function App() {
   const [autoSimulate, setAutoSimulate] = useState(false);
   const autoSimulateTimerRef = useRef<NodeJS.Timeout | null>(null);
   const currentPendingIdRef = useRef<string | null>(null);
+
+  // Endereço IP do cliente detectado para auditoria e histórico de pesquisas
+  const [clientIp, setClientIp] = useState<string>('');
+  const clientIpRef = useRef<string>('');
 
   const [telegramConfig, setTelegramConfig] = useState<TelegramConfigState>({
     hasToken: false,
@@ -227,6 +316,32 @@ export default function App() {
     };
     fetchSystemStatus();
     const statusInterval = setInterval(fetchSystemStatus, 6000);
+
+    // Identificação do endereço IP do cliente para auditoria e histórico de pesquisas
+    const fetchClientIp = async () => {
+      try {
+        const res = await fetch('/api/my-ip');
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.ip) {
+            setClientIp(data.ip);
+            clientIpRef.current = data.ip;
+            return;
+          }
+        }
+      } catch {}
+      try {
+        const res2 = await fetch('https://api.ipify.org?format=json');
+        if (res2.ok) {
+          const d2 = await res2.json();
+          if (d2?.ip) {
+            setClientIp(d2.ip);
+            clientIpRef.current = d2.ip;
+          }
+        }
+      } catch {}
+    };
+    fetchClientIp();
 
     const isNetlify = typeof window !== 'undefined' && window.location.hostname.includes('netlify.app');
     const backendUrl = import.meta.env.VITE_API_URL || (isNetlify ? 'https://shazam-ygad.onrender.com' : (typeof window !== 'undefined' ? window.location.origin : ''));
@@ -359,21 +474,26 @@ export default function App() {
       setHistory((prev) => [completeRecord, ...prev.filter((h) => h.id !== completeRecord.id)]);
       setPendingQueries((prev) => prev.filter((p) => p.id !== completeRecord.id));
 
-      // Persistência automática no Firebase Firestore quando autenticado
-      if (currentUserRef.current) {
-        saveConsultaToFirestore({
-          parametro: completeRecord.queryParam,
-          modulo: completeRecord.moduleType,
-          modulo_titulo: completeRecord.moduleTitle,
-          status: completeRecord.status,
-          tempo_resposta_ms: completeRecord.durationMs,
-          resultado_resumo: completeRecord.parsedReport?.summary?.slice(0, 300) || completeRecord.rawResponse?.slice(0, 300),
-          resposta_bruta: completeRecord.rawResponse,
-          telegram_msg_id: completeRecord.telegramMessageId,
-        }, currentUserRef.current).catch((err) => {
-          console.warn('[Firestore] Falha ao persistir consulta:', err);
-        });
-      }
+      // Persistência automática no Firebase Firestore com detalhamento completo (pesquisa, resultado, data, hora, IP)
+      const userIp = data.clientIp || (completeRecord as any).clientIp || clientIpRef.current || clientIp || '127.0.0.1';
+      const fullResponse = completeRecord.rawResponse || completeRecord.txtContent || '';
+      const summaryText = completeRecord.parsedReport?.summary || fullResponse.slice(0, 300) || 'Consulta processada';
+
+      saveConsultaToFirestore({
+        parametro: completeRecord.queryParam,
+        modulo: completeRecord.moduleType,
+        modulo_titulo: completeRecord.moduleTitle,
+        status: completeRecord.status,
+        tempo_resposta_ms: completeRecord.durationMs,
+        resultado_resumo: summaryText,
+        resposta_bruta: fullResponse,
+        resultado_completo: fullResponse,
+        telegram_msg_id: completeRecord.telegramMessageId,
+        ip: userIp,
+        client_ip: userIp,
+      }, currentUserRef.current || (currentUser ? currentUser : { uid: 'guest_user', email: 'cliente@shazam.terminal', displayName: 'Operador Shazam' })).catch((err) => {
+        console.warn('[Firestore] Falha ao persistir consulta:', err);
+      });
     });
 
     // When a TXT file is downloaded / available for a query
@@ -504,10 +624,17 @@ export default function App() {
 
   // Fetch initial history if available
   useEffect(() => {
+    let unsubscribeProfile: (() => void) | null = null;
+
     // Escutar mudanças de autenticação do Firebase
     const unsubscribeAuth = onAuthUserChanged(async (user) => {
       setCurrentUser(user);
       currentUserRef.current = user;
+
+      if (unsubscribeProfile) {
+        unsubscribeProfile();
+        unsubscribeProfile = null;
+      }
 
       if (user) {
         console.log('[Firebase Auth] Usuário autenticado:', user.email);
@@ -515,6 +642,12 @@ export default function App() {
           // Garante perfil com Plano Premium e teste gratuito de 24 horas (Trial)
           const profile = await syncUserProfile(user);
           setUserProfile(profile);
+
+          // Escuta atualizações do perfil em tempo real (bloqueios, expiração, notificações enviadas pelo Admin)
+          unsubscribeProfile = subscribeUserProfile(user.uid, (updatedProfile) => {
+            console.log('[Firestore] Atualização em tempo real do perfil recebida:', updatedProfile);
+            setUserProfile(updatedProfile);
+          });
 
           const firestoreDocs = await fetchUserHistoryFromFirestore(user.uid);
           if (firestoreDocs && firestoreDocs.length > 0) {
@@ -571,6 +704,9 @@ export default function App() {
 
     return () => {
       unsubscribeAuth();
+      if (unsubscribeProfile) {
+        unsubscribeProfile();
+      }
     };
   }, []);
 
@@ -624,10 +760,43 @@ export default function App() {
     }
   };
 
+  // Handler: Abre Varredura de Moradores por CEP (Até 1 min inicial + até 7 min dossiê profundo)
+  const handleOpenCepScan = (targetCep?: string) => {
+    if (isAccountExpired) {
+      setIsExpiredPlanModalOpen(true);
+      return;
+    }
+    if (targetCep) {
+      setCepScanTarget(targetCep);
+    }
+    setIsCepScanOpen(true);
+  };
+
   // Handler: Start a search with Cota Check (10 Consultas)
   const handleSearch = async (moduleType: QueryModuleType, queryParam: string, isProParam?: boolean, isZyrexParam?: boolean) => {
     // ==============================================================
-    // 0. CHECAGEM DE COOLDOWN (INTERVALO OBRIGATÓRIO DE 15 SEGUNDOS)
+    // 0. CHECAGEM DE BLOQUEIO DE CONTA PELO ADMINISTRADOR
+    // ==============================================================
+    if (isUserBlocked) {
+      alert(`Sua conta foi suspensa pela administração do sistema. Motivo: ${userProfile?.blockedReason || 'Violação das diretrizes'}. Entre em contato com o suporte.`);
+      return;
+    }
+
+    // ==============================================================
+    // 0.1 CHECAGEM MANDATÁRIA DE STATUS EXPIRADO
+    // ==============================================================
+    if (isAccountExpired) {
+      setIsExpiredPlanModalOpen(true);
+      return;
+    }
+
+    // Se o módulo for CEP, abre também a inteligência de varredura profunda de moradores
+    if (moduleType === 'cep') {
+      handleOpenCepScan(queryParam);
+    }
+
+    // ==============================================================
+    // 0.1 CHECAGEM DE COOLDOWN (INTERVALO OBRIGATÓRIO DE 15 SEGUNDOS)
     // ==============================================================
     if (cooldownSeconds > 0) {
       setCooldownToast({
@@ -643,8 +812,8 @@ export default function App() {
     if (userProfile?.plan === 'trial') {
       const saldo = userProfile.consultasRestantes || 0;
       if (saldo <= 0) {
-        // Se zerou, abre a tela de pagamento na hora e BLOQUEIA a busca!
-        setIsPricingModalOpen(true);
+        // Se zerou, abre a tela de plano expirado e BLOQUEIA a busca!
+        setIsExpiredPlanModalOpen(true);
         return; 
       }
     }
@@ -692,6 +861,26 @@ export default function App() {
         if (data.ok && data.record) {
           setCurrentActiveRecord(data.record);
           setHistory((prev) => [data.record, ...prev]);
+
+          const userIp = data.record.clientIp || clientIpRef.current || clientIp || '127.0.0.1';
+          const fullResp = data.record.rawResponse || '';
+          const summaryText = data.record.parsedReport?.summary || fullResp.slice(0, 300) || 'Consulta processada';
+
+          saveConsultaToFirestore({
+            parametro: data.record.queryParam,
+            modulo: data.record.moduleType,
+            modulo_titulo: data.record.moduleTitle,
+            status: data.record.status,
+            tempo_resposta_ms: data.record.durationMs,
+            resultado_resumo: summaryText,
+            resposta_bruta: fullResp,
+            resultado_completo: fullResp,
+            telegram_msg_id: data.record.telegramMessageId,
+            ip: userIp,
+            client_ip: userIp,
+          }, currentUserRef.current || (currentUser ? currentUser : { uid: 'guest_user', email: 'cliente@shazam.terminal', displayName: 'Operador Shazam' })).catch((err) => {
+            console.warn('[Firestore] Falha ao persistir consulta HTTP:', err);
+          });
         } else if (data.error) {
           console.warn('Erro na consulta HTTP:', data.error);
         }
@@ -720,6 +909,11 @@ export default function App() {
 
   // Handler para reiniciar robô com /start e imediatamente continuar a busca
   const handleRestartAndRetry = async (moduleType: string, queryParam: string, isZyrexParam?: boolean) => {
+    if (isAccountExpired) {
+      setIsExpiredPlanModalOpen(true);
+      return;
+    }
+
     setIsLoading(true);
     setActiveOptionsData(null);
     setLoadingStepText('Enviando /start para reiniciar o robô no Telegram...');
@@ -848,12 +1042,6 @@ export default function App() {
   // Dashboard B2B Protegido — Apenas para usuários autenticados
   return (
     <div className="min-h-screen bg-[#012624] text-[#bbc7c6] flex flex-col font-['DM_Sans',sans-serif] selection:bg-[#00827c]/40 selection:text-[#edfffe]">
-      {/* Top Free Trial Notification Banner */}
-      <TrialBanner
-        userProfile={userProfile}
-        onOpenPricing={() => setIsPricingModalOpen(true)}
-      />
-
       {/* Top Application Header */}
       <Header
         isConnected={isConnected}
@@ -867,10 +1055,13 @@ export default function App() {
         onOpenSetup={() => setIsSetupModalOpen(true)}
         onOpenPricing={() => setIsPricingModalOpen(true)}
         onOpenProfile={() => setIsProfileModalOpen(true)}
+        onOpenAdminDashboard={() => setIsAdminDashboardOpen(true)}
         onOpenCode={() => setIsCodeModalOpen(true)}
         onOpenProModal={() => setIsProModalOpen(true)}
         onOpenKrexModal={() => setIsZyrexModalOpen(true)}
         onOpenZyrexModal={() => setIsZyrexModalOpen(true)}
+        onOpenSmartMaps={() => setIsSmartMapsOpen(true)}
+        onOpenCepScan={() => handleOpenCepScan()}
         telegramConfig={telegramConfig}
         onReconnectTelegram={handleReconnectTelegram}
         isReconnectingTelegram={isReconnectingTelegram}
@@ -948,6 +1139,9 @@ export default function App() {
               isProMode={isProMode}
               onToggleProMode={setIsProMode}
               cooldownSeconds={cooldownSeconds}
+              onOpenCepScan={handleOpenCepScan}
+              isAccountExpired={isAccountExpired}
+              onOpenExpiredModal={() => setIsExpiredPlanModalOpen(true)}
             />
 
             {/* Realtime Loading / Options Selection / Waiting State */}
@@ -1048,9 +1242,14 @@ export default function App() {
         currentUser={currentUser}
         userProfile={userProfile}
         onLoginGoogle={handleGoogleLogin}
-        onSelectPlanForPix={(planId) => {
+        onSelectPlanForPix={(planId, options) => {
           setSelectedPlanForPix(planId);
+          setPixDiscountCode(options?.discountCode);
+          setPixDiscountedPrice(options?.discountedPrice);
           setIsPixModalOpen(true);
+        }}
+        onProfileUpdated={(updated) => {
+          setUserProfile(updated);
         }}
       />
 
@@ -1063,16 +1262,30 @@ export default function App() {
         onOpenPricing={() => setIsPricingModalOpen(true)}
         onLogout={handleGoogleLogout}
         onOpenSetup={() => setIsSetupModalOpen(true)}
-        isAdmin={Boolean(currentUser?.email && ['wrbatata6@gmail.com'].includes(currentUser.email.toLowerCase()))}
+        onOpenAdminDashboard={() => setIsAdminDashboardOpen(true)}
+        isAdmin={isAdminUser}
+      />
+
+      {/* Admin Master Dashboard Modal (Estatísticas, Usuários, Faturamento e Cupons) */}
+      <AdminDashboardModal
+        isOpen={isAdminDashboardOpen}
+        onClose={() => setIsAdminDashboardOpen(false)}
+        currentUserEmail={currentUser?.email}
       />
 
       {/* UP DEPIX PIX Checkout Modal */}
       <PixCheckoutModal
         isOpen={isPixModalOpen}
-        onClose={() => setIsPixModalOpen(false)}
+        onClose={() => {
+          setIsPixModalOpen(false);
+          setPixDiscountCode(undefined);
+          setPixDiscountedPrice(undefined);
+        }}
         planId={selectedPlanForPix}
         currentUser={currentUser}
         userProfile={userProfile}
+        initialDiscountCode={pixDiscountCode}
+        initialDiscountedPrice={pixDiscountedPrice}
         onPaymentSuccess={(updated) => {
           setUserProfile(updated);
         }}
@@ -1097,7 +1310,9 @@ export default function App() {
         loadingStepText={loadingStepText}
         activeRecord={currentActiveRecord}
         onOpenPricing={() => setIsPricingModalOpen(true)}
+        onOpenExpiredModal={() => setIsExpiredPlanModalOpen(true)}
         cooldownSeconds={cooldownSeconds}
+        isAccountExpired={isAccountExpired}
       />
 
       {/* Rota Paralela BUSCAS KREX (KREX) */}
@@ -1111,7 +1326,9 @@ export default function App() {
         loadingStepText={loadingStepText}
         activeRecord={currentActiveRecord}
         onOpenPricing={() => setIsPricingModalOpen(true)}
+        onOpenExpiredModal={() => setIsExpiredPlanModalOpen(true)}
         cooldownSeconds={cooldownSeconds}
+        isAccountExpired={isAccountExpired}
         activeOptionsData={activeOptionsData}
         onSelectOption={handleSelectOption}
       />
@@ -1125,6 +1342,42 @@ export default function App() {
         pendingCountByModule={pendingCountByModule}
         onOpenProModal={() => setIsProModalOpen(true)}
         onOpenKrexModal={() => setIsZyrexModalOpen(true)}
+        onOpenSmartMaps={() => setIsSmartMapsOpen(true)}
+        onOpenCepScan={() => handleOpenCepScan()}
+      />
+
+      {/* Smart Maps Modal - Geolocalização, Google Maps & Cruzamento Cadastral de Moradores */}
+      <SmartMapsModal
+        isOpen={isSmartMapsOpen}
+        onClose={() => setIsSmartMapsOpen(false)}
+        onExecuteDossier={(mod, query) => handleSearch(mod, query)}
+        onOpenCepScan={handleOpenCepScan}
+      />
+
+      {/* Varredura Profunda de Moradores por CEP (Busca de até 1 min + Dossiê de até 7 min) */}
+      <CepIntelligenceModal
+        isOpen={isCepScanOpen}
+        onClose={() => {
+          setIsCepScanOpen(false);
+          setCepScanTarget(undefined);
+        }}
+        initialCep={cepScanTarget}
+        onExecuteModuleQuery={(mod, query) => handleSearch(mod, query)}
+        isAccountExpired={isAccountExpired}
+        onOpenExpiredModal={() => setIsExpiredPlanModalOpen(true)}
+      />
+
+      {/* Pop-up Mandatário de Plano Expirado */}
+      <ExpiredPlanModal
+        isOpen={isExpiredPlanModalOpen}
+        onClose={() => setIsExpiredPlanModalOpen(false)}
+        currentUser={currentUser}
+        userProfile={userProfile}
+        onOpenPricing={() => setIsPricingModalOpen(true)}
+        onSelectPlanForPix={(planId) => {
+          setSelectedPlanForPix(planId);
+          setIsPixModalOpen(true);
+        }}
       />
 
       {/* Floating Cooldown Notification Toast com Timer e Mensagem */}
@@ -1165,6 +1418,168 @@ export default function App() {
           >
             <X className="w-4 h-4" />
           </button>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* NOTIFICAÇÃO TRANSMITIDA PELA ADMINISTRAÇÃO EM TEMPO REAL */}
+      {/* ============================================================== */}
+      {activeNotification && !isUserBlocked && (
+        <div 
+          id="admin-notification-toast"
+          role="alert"
+          aria-live="polite"
+          className="fixed top-20 right-4 sm:right-6 z-50 max-w-md w-[calc(100vw-2rem)] bg-[#011d1c] border-2 border-[#00827c] rounded-2xl p-4 sm:p-5 shadow-2xl shadow-black/80 font-mono animate-in slide-in-from-top-4 fade-in duration-300 backdrop-blur-md"
+        >
+          <div className="flex items-start gap-3">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
+              activeNotification.type === 'urgent' 
+                ? 'bg-red-950/60 border-red-500 text-red-400 animate-pulse'
+                : activeNotification.type === 'warning'
+                ? 'bg-amber-950/60 border-amber-500 text-amber-400'
+                : activeNotification.type === 'success'
+                ? 'bg-emerald-950/60 border-emerald-500 text-emerald-400'
+                : 'bg-[#00827c]/20 border-[#00827c] text-[#00a8a0]'
+            }`}>
+              <Bell className="w-5 h-5" />
+            </div>
+
+            <div className="flex-1 min-w-0 text-left">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-bold text-white tracking-wide">
+                  {activeNotification.title}
+                </span>
+                <button
+                  id="btn-dismiss-admin-notification"
+                  onClick={handleDismissNotification}
+                  className="text-[#707777] hover:text-white p-1 rounded transition-colors cursor-pointer"
+                  title="Fechar notificação"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <p className="text-xs text-[#cbfffc] mt-1.5 font-sans leading-relaxed break-words">
+                {activeNotification.message}
+              </p>
+
+              {/* Anexo de Imagem / Banner do WebPush */}
+              {activeNotification.imageUrl && (
+                <div className="mt-2.5 rounded-xl overflow-hidden border border-[#00827c]/60 max-h-48 bg-black/40">
+                  <img
+                    src={activeNotification.imageUrl}
+                    alt="Banner Notificação"
+                    className="w-full max-h-48 object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+              )}
+
+              {/* Link de Redirecionamento */}
+              {activeNotification.linkUrl && (
+                <div className="mt-2.5 pt-1 flex items-center justify-end">
+                  <a
+                    href={activeNotification.linkUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={handleDismissNotification}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#00827c] hover:bg-[#00a8a0] text-[#012624] font-bold text-xs transition-colors shadow-sm cursor-pointer"
+                  >
+                    <span>Acessar Link</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between text-[10px] text-[#707777] mt-3 pt-2 border-t border-[#003734]">
+                <span>{activeNotification.sentBy || 'Administração'}</span>
+                <button
+                  id="btn-mark-notification-read"
+                  onClick={handleDismissNotification}
+                  className="px-2.5 py-1 rounded bg-[#003734] hover:bg-[#00827c]/40 text-[#00a8a0] font-bold text-[11px] transition-colors cursor-pointer"
+                >
+                  Marcar como lida
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL DE SOLICITAÇÃO DE PERMISSÃO WEBPUSH APÓS LOGIN */}
+      {/* ============================================================== */}
+      {currentUser && (
+        <NotificationPermissionModal
+          isOpen={showNotificationPrompt}
+          onClose={() => {
+            setShowNotificationPrompt(false);
+            sessionStorage.setItem('shazam_push_prompt_dismissed', 'true');
+          }}
+          userId={currentUser.uid}
+          userName={userProfile?.displayName || currentUser.displayName || undefined}
+          onGranted={() => {
+            setShowNotificationPrompt(false);
+          }}
+        />
+      )}
+
+      {/* ============================================================== */}
+      {/* TELA DE CONTA BLOQUEADA PELO ADMINISTRADOR (OVERLAY INVIOLÁVEL) */}
+      {/* ============================================================== */}
+      {isUserBlocked && (
+        <div 
+          id="account-blocked-overlay"
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md font-mono animate-in fade-in"
+        >
+          <div className="w-full max-w-md rounded-2xl bg-[#011d1c] border-2 border-red-500/80 shadow-2xl p-6 sm:p-8 text-center text-left relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-600 via-rose-500 to-red-600 animate-pulse" />
+            
+            <div className="w-16 h-16 rounded-2xl bg-red-950/60 border border-red-500/50 flex items-center justify-center text-red-400 mx-auto mb-5 shadow-lg shadow-red-950/50">
+              <Lock className="w-8 h-8" />
+            </div>
+
+            <h2 className="text-xl font-extrabold text-white text-center mb-2 tracking-wide">
+              ACESSO BLOQUEADO
+            </h2>
+
+            <p className="text-xs text-[#bbc7c6] text-center mb-5 font-sans">
+              Seu acesso ao Terminal Shazam Buscas foi suspenso pela administração do sistema.
+            </p>
+
+            <div className="p-4 rounded-xl bg-red-950/30 border border-red-500/30 text-xs text-red-200 text-left mb-6 space-y-1.5">
+              <div className="font-bold text-red-400 flex items-center gap-1.5 uppercase text-[10px]">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                <span>Motivo da Suspensão:</span>
+              </div>
+              <div className="font-sans text-xs text-[#edfffe] leading-relaxed">
+                {userProfile?.blockedReason || 'Suspensão preventiva aplicada pela moderação.'}
+              </div>
+              {userProfile?.blockedAt && (
+                <div className="text-[10px] text-red-400/80 pt-1">
+                  Data do bloqueio: {new Date(userProfile.blockedAt).toLocaleString('pt-BR')}
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2.5">
+              <a
+                href="https://t.me/shazambuscas"
+                target="_blank"
+                rel="noreferrer"
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:opacity-90 text-white font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-lg shadow-red-900/30"
+              >
+                <span>Falar com o Suporte Oficial</span>
+              </a>
+              <button
+                id="btn-blocked-logout"
+                onClick={handleGoogleLogout}
+                className="w-full py-2.5 rounded-xl bg-[#012624] hover:bg-[#003734] text-[#bbc7c6] text-xs font-semibold transition-colors cursor-pointer border border-[#003734]"
+              >
+                Encerrar Sessão
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

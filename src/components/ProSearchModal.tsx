@@ -43,7 +43,9 @@ interface ProSearchModalProps {
   loadingStepText?: string;
   activeRecord?: QueryRecord | null;
   onOpenPricing: () => void;
+  onOpenExpiredModal?: () => void;
   cooldownSeconds?: number;
+  isAccountExpired?: boolean;
 }
 
 export const ProSearchModal: React.FC<ProSearchModalProps> = ({
@@ -55,7 +57,9 @@ export const ProSearchModal: React.FC<ProSearchModalProps> = ({
   loadingStepText,
   activeRecord,
   onOpenPricing,
+  onOpenExpiredModal,
   cooldownSeconds = 0,
+  isAccountExpired = false,
 }) => {
   const defaultAvailableModule = PRO_MODULES.find((m) => !m.inDevelopment) || PRO_MODULES[1] || PRO_MODULES[0];
   const [selectedModule, setSelectedModule] = useState<ProModuleInfo>(defaultAvailableModule);
@@ -114,14 +118,21 @@ export const ProSearchModal: React.FC<ProSearchModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const query = inputVal.trim();
-    if (!query || isLoading || selectedModule.inDevelopment || cooldownSeconds > 0) return;
+    if (!query || isLoading || selectedModule.inDevelopment) return;
 
-    // Trial expiration check (24h period)
+    // Bloqueio mandatário para contas expiradas
     const validity = calculateAccountValidity(userProfile);
-    if (userProfile?.plan === 'trial' && !validity.isValid) {
-      onOpenPricing();
+    const expired = isAccountExpired || validity.isExpired || !validity.isValid || userProfile?.planStatus === 'expired';
+    if (expired) {
+      if (onOpenExpiredModal) {
+        onOpenExpiredModal();
+      } else {
+        onOpenPricing();
+      }
       return;
     }
+
+    if (cooldownSeconds > 0) return;
 
     onSearch(selectedModule.id, query, true);
   };
@@ -424,6 +435,24 @@ export const ProSearchModal: React.FC<ProSearchModalProps> = ({
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Banner Informativo de Plano Expirado */}
+              {(isAccountExpired || validity.isExpired || !validity.isValid || userProfile?.planStatus === 'expired') && (
+                <div 
+                  onClick={onOpenExpiredModal || onOpenPricing}
+                  className="p-3 rounded-[8px] bg-[#ef4444]/20 border border-[#ef4444]/50 text-[#ffffff] flex items-center justify-between gap-2 shadow-md cursor-pointer hover:bg-[#ef4444]/30 transition-colors animate-in fade-in duration-200"
+                >
+                  <div className="flex items-center gap-2 text-xs">
+                    <XCircle className="w-4 h-4 text-[#ef4444] shrink-0" />
+                    <span>
+                      <strong className="text-[#ffd166]">O seu plano está expirado!</strong> Contrate um plano para continuar realizando consultas.
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#ef4444] text-white font-bold uppercase tracking-wider shrink-0">
+                    Renovar
+                  </span>
+                </div>
+              )}
+
               {/* Banner Informativo de Cooldown (15s Obrigatórios) */}
               {cooldownSeconds > 0 && (
                 <div className="p-3 rounded-[8px] bg-[#011d1c] border border-[#ffd166]/40 text-[#ffd166] flex items-center justify-between gap-2 shadow-md animate-in fade-in duration-200">

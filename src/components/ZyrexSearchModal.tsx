@@ -28,7 +28,7 @@ import {
   ZyrexModuleInfo,
 } from '../utils/zyrexModulesData';
 import { QueryRecord, QueryOption } from '../types';
-import { UserProfileData } from '../lib/firebase';
+import { UserProfileData, calculateAccountValidity } from '../lib/firebase';
 import { getTelegramCommand } from '../utils/telegramCommandHelper';
 import { OptionsSelectionCard } from './OptionsSelectionCard';
 
@@ -42,7 +42,9 @@ interface ZyrexSearchModalProps {
   loadingStepText?: string;
   activeRecord?: QueryRecord | null;
   onOpenPricing: () => void;
+  onOpenExpiredModal?: () => void;
   cooldownSeconds?: number;
+  isAccountExpired?: boolean;
   activeOptionsData?: {
     requestId: string;
     prompt: string;
@@ -63,7 +65,9 @@ export const ZyrexSearchModal: React.FC<ZyrexSearchModalProps> = ({
   loadingStepText,
   activeRecord,
   onOpenPricing,
+  onOpenExpiredModal,
   cooldownSeconds = 0,
+  isAccountExpired = false,
   activeOptionsData,
   onSelectOption,
 }) => {
@@ -152,13 +156,40 @@ export const ZyrexSearchModal: React.FC<ZyrexSearchModalProps> = ({
   };
 
   const handleTriggerSearch = () => {
-    if (!inputVal.trim() || isLoading || cooldownSeconds > 0) return;
+    if (!inputVal.trim() || isLoading) return;
+
+    // Bloqueio mandatário para contas expiradas
+    const validity = calculateAccountValidity(userProfile);
+    const expired = isAccountExpired || validity.isExpired || !validity.isValid || userProfile?.planStatus === 'expired';
+    if (expired) {
+      if (onOpenExpiredModal) {
+        onOpenExpiredModal();
+      } else {
+        onOpenPricing();
+      }
+      return;
+    }
+
+    if (cooldownSeconds > 0) return;
     onSearch(selectedModule.id, inputVal.trim(), true);
   };
 
   const handleRestartAndRetryClick = async () => {
     const targetQuery = activeRecord?.queryParam || inputVal.trim();
     if (!targetQuery) return;
+
+    // Bloqueio mandatário para contas expiradas
+    const validity = calculateAccountValidity(userProfile);
+    const expired = isAccountExpired || validity.isExpired || !validity.isValid || userProfile?.planStatus === 'expired';
+    if (expired) {
+      if (onOpenExpiredModal) {
+        onOpenExpiredModal();
+      } else {
+        onOpenPricing();
+      }
+      return;
+    }
+
     setIsRestarting(true);
     try {
       if (onRestartAndRetry) {

@@ -277,7 +277,44 @@ COR: CINZA VULCANO | POTÊNCIA: 265 CV
 PROPRIETÁRIO ATUAL: COSTA & ALBUQUERQUE TECNOLOGIA LTDA
 GRAVAME: QUITADO (SEM RESTRIÇÃO FINANCEIRA)
 SITUAÇÃO ROUBO/FURTO: NADA CONSTA
-DÉBITOS / MULTAS: NENHUM DÉBITO PENDENTE`
+DÉBITOS / MULTAS: NENHUM DÉBITO PENDENTE`,
+
+  cep: `📍 [VARREDURA DE MORADORES & LOGRADOURO POR CEP]
+=========================================
+CEP CONSULTADO: 01419-002
+LOGRADOURO: Alameda Santos, 1000 a 1400
+BAIRRO: Cerqueira César | CIDADE/UF: São Paulo - SP
+TIPO DE LOGRADOURO: Via Urbana Principal
+POPULAÇÃO ESTIMADA NO RAIO: 4.820 pessoas
+
+👥 MORADORES IDENTIFICADOS NESTE CEP:
+1. CLAUDIO HENRIQUE VIEIRA (Apto 42)
+   - CPF: 312.***.***-09 | Nascimento: 1982
+   - Status: Residente Confirmado (Receita Federal / Concessionária)
+2. MARIANA ALBUQUERQUE LIMA (Apto 71)
+   - CPF: 429.***.***-81 | Nascimento: 1990
+   - Status: Residente Confirmada (Bancário / Concessionária)
+3. ROBERTO CARLOS MENEZES (Apto 114)
+   - CPF: 188.***.***-34 | Nascimento: 1976
+   - Status: Titular do Imóvel (IPTU / Cartório)
+
+💡 DICA: Clique em "VARREDURA CEP" no menu para gerar dossiê profundo individual com até 7 minutos de mineração analítica passo a passo.`,
+
+  endereco: `🏠 [CONSULTA DE ENDEREÇO & MORADORES ASSOCIADOS]
+=========================================
+ENDEREÇO: Avenida Paulista, 1578
+BAIRRO: Bela Vista | CIDADE/UF: São Paulo - SP
+CEP: 01310-200
+
+🏢 DADOS DO IMÓVEL & HISTÓRICO:
+- Tipo: Misto (Residencial / Comercial)
+- Área Estimada: 142 m²
+- Concessionária de Energia: Enel SP (Titular Ativo)
+- Concessionária de Água: Sabesp (Ligação Regular)
+
+👥 MORADORES & OCUPANTES RECENTES:
+1. CARLOS EDUARDO NOBREGA (CPF: 219.***.***-45)
+2. BEATRIZ HELENA FONSECA (CPF: 384.***.***-12)`
 };
 
 /**
