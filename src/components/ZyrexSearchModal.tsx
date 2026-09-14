@@ -660,7 +660,7 @@ export const ZyrexSearchModal: React.FC<ZyrexSearchModalProps> = ({
                         {/* Telegram Raw Response snippet */}
                         {activeRecord?.rawResponse && (
                           <div className="p-3 bg-[#110507] rounded-lg border border-[#ff4757]/30 text-xs font-mono text-[#ff99a8] whitespace-pre-wrap">
-                            <span className="text-[#888888] text-[10px] block mb-1 uppercase font-semibold">Resposta do Bot no Telegram:</span>
+                            <span className="text-[#888888] text-[10px] block mb-1 uppercase font-semibold">Resposta da Central de Dados:</span>
                             {activeRecord.rawResponse}
                           </div>
                         )}

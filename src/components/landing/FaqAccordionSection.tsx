@@ -43,7 +43,7 @@ const FAQ_ITEMS: FaqItem[] = [
     id: 'f6',
     num: '06',
     question: 'Como funciona o suporte técnico aos operadores?',
-    answer: 'Disponibilizamos suporte direto via Telegram e e-mail. Você fala diretamente com operadores humanos para sanar dúvidas sobre módulos ou pagamentos.',
+    answer: 'Disponibilizamos suporte direto via central dedicada e e-mail. Você fala diretamente com operadores humanos para sanar dúvidas sobre módulos ou pagamentos.',
   },
   {
     id: 'f7',

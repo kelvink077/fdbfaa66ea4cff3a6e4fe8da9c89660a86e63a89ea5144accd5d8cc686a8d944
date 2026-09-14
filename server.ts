@@ -162,6 +162,26 @@ function isMessageFromAuthorizedBot(message: any): boolean {
     return true;
   }
 
+  // 6. Autorização dinâmica por consulta ativa pendente em chat privado
+  if (activeQueries.size > 0) {
+    for (const q of activeQueries.values()) {
+      const qPeer = (q as any).targetPeerId;
+      const qChat = (q as any).targetChatId;
+      if (qPeer && ids.some((id) => id === String(qPeer))) return true;
+      if (qChat) {
+        const cleanTarget = String(qChat).replace('@', '').toLowerCase();
+        if (ids.some((id) => id.toLowerCase().includes(cleanTarget)) || (senderUsername && senderUsername.includes(cleanTarget))) {
+          return true;
+        }
+      }
+    }
+    // Se for mensagem 1-a-1 de usuário/bot (PeerUser) com consulta ativa aguardando resposta
+    const isPeerUser = message.peerId?.className === 'PeerUser' || message.peerId?.constructor?.name === 'PeerUser' || Boolean(message.peerId?.userId);
+    if (isPeerUser) {
+      return true;
+    }
+  }
+
   return false;
 }
 
@@ -1238,12 +1258,14 @@ async function executeOptionSelection(
   q.status = 'processing';
 
   // Notifica o cliente frontend
-  io.to(q.socketId).emit('query:progress', {
+  const progressPayload = {
     id: requestId,
-    message: `Base "${optionText}" selecionada! Consultando dados oficiais no Telegram...`,
+    message: `Base "${optionText}" selecionada! Consultando dados cadastrais oficiais...`,
     status: 'processing',
     selectedOption: optionText,
-  });
+  };
+  io.to(q.socketId).emit('query:progress', progressPayload);
+  io.emit('query:progress', progressPayload);
 
   let menuMsg = menuMessagesByReqId.get(requestId) || (q as any).menuMessage;
   const targetChat = (q.isZyrex || (q as any).isKrex)
@@ -1380,10 +1402,12 @@ function isRecognizedBotDossierContent(text: string): boolean {
     /cidade\/uf\s*:/i.test(t) ||
     /cep\s*:\s*\d+/i.test(t) ||
     /cpf\s*:\s*\d+/i.test(t) ||
+    /cnpj\s*:\s*\d+/i.test(t) ||
     /rg\s*:\s*\d+/i.test(t) ||
     /nome\s*:\s*[a-zA-Z]/i.test(t) ||
     /nasc\w*\s*:\s*\d+/i.test(t) ||
     /m[ãa]e\s*:\s*[a-zA-Z]/i.test(t) ||
+    /pai\s*:\s*[a-zA-Z]/i.test(t) ||
     /chassi\s*:/i.test(t) ||
     /renavam\s*:/i.test(t) ||
     /marca\s*[\/:]/i.test(t) ||
@@ -1405,7 +1429,15 @@ function isRecognizedBotDossierContent(text: string): boolean {
     /renda\s*:/i.test(t) ||
     /poder\s+aquisitivo/i.test(t) ||
     /parentes/i.test(t) ||
-    /telefones?\s*\(?\d*\)?\s*:/i.test(t)
+    /telefones?\s*\(?\d*\)?\s*:/i.test(t) ||
+    /endere[çc]os?/i.test(t) ||
+    /v[íi]nculos?/i.test(t) ||
+    /empresas?/i.test(t) ||
+    /devil/i.test(t) ||
+    /credilink/i.test(t) ||
+    /krex/i.test(t) ||
+    /zyrex/i.test(t) ||
+    (t.length > 80 && t.split('\n').length >= 3)
   );
 }
 
@@ -1419,6 +1451,16 @@ function isTransientProgressMessage(text: string): boolean {
     return false;
   }
 
+  // Se já contém indicação de resultado negativo ou não encontrado, NÃO é transitória
+  if (/n[ãa]o\s+encontrado|nao\s+encontrado|nada\s+consta|n[ãa]o\s+localizado|nenhum\s+registro/i.test(trimmed)) {
+    return false;
+  }
+
+  // Se a mensagem for longa (> 120 caracteres) ou tiver mais de 3 linhas, NÃO é transitória
+  if (trimmed.length > 120 || trimmed.split('\n').length > 3) {
+    return false;
+  }
+
   // Se já contém dados estruturados cadastrais/veiculares, NÃO é transitória
   const hasStructuredData = 
     /dados\s+b[aá]sicos|cpf\s*:|nome\s*:|logradouro\s*:|telefones?\s*\(?\d*\)?\s*:|ve[íi]culos?\s*\(?\d*\)?\s*:|chassi\s*:|renavam\s*:|placa\s*:/i.test(trimmed);
@@ -1426,7 +1468,7 @@ function isTransientProgressMessage(text: string): boolean {
     return false;
   }
 
-  // Padrões diretos de status de carregamento:
+  // Padrões diretos e exclusivos de status de carregamento curto:
   if (
     /^(?:[🔍🔎⏳⌛📍⚡\s]*)(?:consultando|processando|buscando|pesquisando|aguarde|gerando)(?:\s+\w+|\.{1,3}|\b)/iu.test(trimmed) ||
     trimmed === '🔍 Consultando...' ||
@@ -1438,29 +1480,8 @@ function isTransientProgressMessage(text: string): boolean {
     return true;
   }
 
-  // 1. Indicadores claros de status/processamento intermediário
-  const hasIntermediateIndicator = 
-    /consultando\b/i.test(trimmed) ||
-    /processando\b/i.test(trimmed) ||
-    /aguarde\b/i.test(trimmed) ||
-    /buscando\b/i.test(trimmed) ||
-    /pesquisando\b/i.test(trimmed) ||
-    /gerando\b/i.test(trimmed) ||
-    trimmed.includes('⏳') ||
-    trimmed.includes('⌛') ||
-    trimmed.includes('🔍') ||
-    trimmed.includes('🔎');
-
-  // 2. Indicadores de que a resposta REAL/FINAL já chegou
-  const isFinalResponse = isRecognizedBotDossierContent(trimmed);
-
-  // Se tem indicador de intermediário e NÃO é resposta final: É TRANSITÓRIA!
-  if (hasIntermediateIndicator && !isFinalResponse) {
-    return true;
-  }
-
-  // Mensagens curtas com ícones ou verbos de carregamento
-  if (trimmed.length < 90 && !isFinalResponse) {
+  // Se é uma mensagem muito curta com emoji ou verbo de busca isolado
+  if (trimmed.length < 50) {
     if (/^[📍⏳⌛🔎🔍]/u.test(trimmed)) return true;
     if (/^(consultando|processando|buscando|pesquisando|aguarde)/i.test(trimmed)) return true;
   }
@@ -1487,6 +1508,8 @@ async function handleUserbotIncomingMessage(event: any) {
     const senderId = message.senderId ? String(message.senderId) : (message.fromId?.userId ? String(message.fromId.userId) : '');
     const chatId = message.chatId ? String(message.chatId) : '';
     const peerUserId = message.peerId?.userId ? String(message.peerId.userId) : '';
+    const ids = [senderId, chatId, peerUserId].filter(Boolean);
+    const senderUsername = (message.sender?.username || message.chat?.username || '').toLowerCase().replace('@', '');
 
     const oldBotCleanId = TELEGRAM_CHAT_ID_OLD.replace('@', '').toLowerCase(); 
     const isFromOldBot = Boolean(oldBotCleanId && (senderId.toLowerCase().includes(oldBotCleanId) || chatId.toLowerCase().includes(oldBotCleanId) || peerUserId.toLowerCase().includes(oldBotCleanId)));
@@ -1561,14 +1584,18 @@ async function handleUserbotIncomingMessage(event: any) {
     // 3.3: Busca pelo alvo (CPF, placa, nome, etc.) no texto recebido, no TXT ou na foto
     if (!targetRequestId && (incomingText || attachedTxtContent || attachedPhoto)) {
       const fullSearchCorpus = `${incomingText} ${attachedTxtContent || ''} ${attachedPhoto?.fileName || ''} ${attachedPhoto?.caption || ''}`.toLowerCase();
+      const corpusDigitsOnly = fullSearchCorpus.replace(/\D/g, '');
+
       for (const [reqId, q] of activeQueries.entries()) {
         const clean = (q.cleanedTarget || q.queryParam.replace(/\D/g, '')).toLowerCase();
-        if (clean && clean.length >= 4 && fullSearchCorpus.includes(clean)) {
+        if (clean && clean.length >= 4 && (fullSearchCorpus.includes(clean) || (corpusDigitsOnly.length >= 4 && corpusDigitsOnly.includes(clean)))) {
           targetRequestId = reqId;
+          console.log(`[GramJS] 🎯 Consulta ativa ${reqId} associada com precisão ao alvo buscado (${clean})`);
           break;
         }
         if (q.queryParam && q.queryParam.length >= 3 && fullSearchCorpus.includes(q.queryParam.toLowerCase())) {
           targetRequestId = reqId;
+          console.log(`[GramJS] 🎯 Consulta ativa ${reqId} associada pelo queryParam (${q.queryParam})`);
           break;
         }
         if (q.telegramCommand && fullSearchCorpus.includes(q.telegramCommand.toLowerCase())) {
@@ -1582,19 +1609,22 @@ async function handleUserbotIncomingMessage(event: any) {
       }
     }
 
-    // 3.4: Se ainda não encontrou, APENAS vincula se a mensagem for comprovadamente do bot
-    // (Menu de seleção interativa, Erro interno do bot, Mensagem transitória ou Dossiê reconhecido com alvo compatível)
+    // 3.4: Se ainda não encontrou por alvo explícito, vincula à consulta ativa correspondente à rota/bot
     if (!targetRequestId && activeQueries.size > 0) {
-      const inlineButtons = extractAllInlineButtons(message);
-      const isSelection = isInteractiveSelectionMenu(incomingText, inlineButtons);
-      const isTransient = isTransientProgressMessage(incomingText);
-      const isBotErr = isBotInternalErrorMessage(incomingText);
-      const isDossier = isRecognizedBotDossierContent(incomingText) || Boolean(attachedTxtContent) || Boolean(attachedPhoto);
+      const reversedEntries = Array.from(activeQueries.entries()).reverse();
 
-      if (isSelection || isTransient || isBotErr || isDossier) {
-        const reversedEntries = Array.from(activeQueries.entries()).reverse();
+      // Caso 1: Apenas 1 consulta ativa em andamento no sistema -> vinculação direta e garantida
+      if (activeQueries.size === 1) {
+        targetRequestId = reversedEntries[0][0];
+        console.log(`[GramJS] ⚡ Vinculando resposta à única consulta ativa: ${targetRequestId} (${reversedEntries[0][1].queryParam})`);
+      } else {
+        // Caso 2: Múltiplas consultas ativas -> direciona pela rota do bot remetente
         for (const [reqId, q] of reversedEntries) {
-          const isZyrexQuery = Boolean(q.isZyrex || (q as any).isKrex || q.moduleType === 'cep' || String(q.moduleType).toLowerCase().startsWith('zyrex') || String(q.moduleType).toLowerCase().startsWith('krex'));
+          const isZyrexQuery = Boolean(
+            q.isZyrex || (q as any).isKrex || q.moduleType === 'cep' || 
+            String(q.moduleType).toLowerCase().startsWith('zyrex') || 
+            String(q.moduleType).toLowerCase().startsWith('krex')
+          );
           const isProQuery = !isZyrexQuery && Boolean(q.isPro || String(q.moduleType).toLowerCase().startsWith('pro'));
 
           if (isZyrexQuery && isFromZyrexBot) {
@@ -1609,16 +1639,37 @@ async function handleUserbotIncomingMessage(event: any) {
             targetRequestId = reqId;
             break;
           }
+
+          // Verificação por peerId ou chatId salvos
+          const qTargetPeer = (q as any).targetPeerId;
+          const qTargetChat = (q as any).targetChatId;
+          if (qTargetPeer && ids.some((id) => id === String(qTargetPeer))) {
+            targetRequestId = reqId;
+            break;
+          }
+          if (qTargetChat) {
+            const cleanTarget = String(qTargetChat).replace('@', '').toLowerCase();
+            if (ids.some((id) => id.toLowerCase().includes(cleanTarget)) || (senderUsername && senderUsername.includes(cleanTarget))) {
+              targetRequestId = reqId;
+              break;
+            }
+          }
+        }
+
+        // Fallback: vincula à consulta ativa mais recente
+        if (!targetRequestId) {
+          targetRequestId = reversedEntries[0][0];
+          console.log(`[GramJS] ⚡ Vinculando resposta à consulta ativa mais recente: ${targetRequestId}`);
         }
       }
     }
 
-    // Se ainda não encontrou e recebemos um documento TXT, vincula APENAS se houver correspondência com o alvo
+    // Se ainda não encontrou e recebemos um documento TXT, vincula se houver correspondência com o alvo
     if (!targetRequestId && attachedTxtContent) {
-      // 1. Vincula a alguma consulta ativa que corresponda ao alvo
+      const txtDigitsOnly = attachedTxtContent.replace(/\D/g, '');
       for (const [reqId, q] of activeQueries.entries()) {
         const clean = (q.cleanedTarget || q.queryParam.replace(/\D/g, '')).toLowerCase();
-        const matches = (clean && clean.length >= 4 && attachedTxtContent.toLowerCase().includes(clean)) ||
+        const matches = (clean && clean.length >= 4 && (attachedTxtContent.toLowerCase().includes(clean) || txtDigitsOnly.includes(clean))) ||
           (q.queryParam && q.queryParam.length >= 3 && attachedTxtContent.toLowerCase().includes(q.queryParam.toLowerCase()));
         if (matches) {
           (q as any).txtContent = attachedTxtContent;
@@ -1780,23 +1831,27 @@ async function handleUserbotIncomingMessage(event: any) {
         q.status = 'waiting_selection';
 
         // Emite imediatamente evento dedicado ao frontend para exibir o seletor de base
-        io.to(q.socketId).emit('query:options_available', {
+        const optionsPayload = {
           id: targetRequestId,
           prompt: incomingText,
           options: availableOptions,
           moduleType: q.moduleType,
           queryParam: q.queryParam,
           status: 'waiting_selection',
-        });
+        };
+        io.to(q.socketId).emit('query:options_available', optionsPayload);
+        io.emit('query:options_available', optionsPayload);
 
         // Emite também no canal de progresso
-        io.to(q.socketId).emit('query:progress', {
+        const progressPayload = {
           id: targetRequestId,
-          message: '📋 Opções de base recebidas do Telegram! Selecione a base desejada:',
+          message: '📋 Opções de base recebidas! Selecione a base desejada:',
           status: 'waiting_selection',
           options: availableOptions,
           selectionPrompt: incomingText,
-        });
+        };
+        io.to(q.socketId).emit('query:progress', progressPayload);
+        io.emit('query:progress', progressPayload);
 
         // Timer de auto-seleção (25s) caso o usuário não clique em nenhum botão na UI
         if ((q as any).selectionFallbackTimer) {
@@ -2723,6 +2778,7 @@ function handleIncomingTelegramResponse(requestId: string, rawText: string, meta
   if (record.telegramMessageId) queryByTelegramMsgId.delete(record.telegramMessageId);
 
   io.to(record.socketId).emit('query:response', { ...record, meta });
+  io.emit('query:response', { ...record, meta });
   io.emit('query:completed_broadcast', { ...record, meta });
   return record;
 }
@@ -2737,11 +2793,13 @@ setInterval(() => {
       if ((q as any).selectionFallbackTimer) clearTimeout((q as any).selectionFallbackTimer);
       activeQueries.delete(id);
       if (q.telegramMessageId) queryByTelegramMsgId.delete(q.telegramMessageId);
-      io.to(q.socketId).emit('query:response', {
+      const errPayload = {
         ...q,
         status: 'error',
-        errorMessage: 'Tempo limite de resposta do robô Telegram excedido. Por favor tente novamente.',
-      });
+        errorMessage: 'Tempo limite de resposta da central de dados excedido. Por favor tente novamente.',
+      };
+      io.to(q.socketId).emit('query:response', errPayload);
+      io.emit('query:response', errPayload);
     }
   }
 }, 20000);

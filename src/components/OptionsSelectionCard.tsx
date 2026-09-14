@@ -89,7 +89,7 @@ export const OptionsSelectionCard: React.FC<OptionsSelectionCardProps> = ({
     if (t.includes('DEVIL')) return 'Base cadastral alternativa com contatos atualizados e vínculos.';
     if (t.includes('NACIONAL')) return 'Base oficial do Denatran com chassi, renavam, proprietário e multas.';
     if (t.includes('RADAR')) return 'Câmeras OCR e histórico de passagens em rodovias estaduais e federais.';
-    return 'Consulta em tempo real através da base de dados do bot Telegram.';
+    return 'Consulta em tempo real através do barramento de dados integrado.';
   };
 
   return (
@@ -212,10 +212,10 @@ export const OptionsSelectionCard: React.FC<OptionsSelectionCardProps> = ({
           <div className="flex items-center gap-2">
             <Loader2 className="w-4 h-4 animate-spin text-[#79fbf5]" />
             <span>
-              Base <strong>{activeSelection}</strong> selecionada. Disparando callback no Telegram e aguardando retorno dos dados...
+              Base <strong>{activeSelection}</strong> selecionada. Requisitando dados oficiais e aguardando retorno...
             </span>
           </div>
-          <span className="text-[10px] text-[#707777] uppercase">Aguardando resposta do Bot</span>
+          <span className="text-[10px] text-[#707777] uppercase">Processando Dados</span>
         </div>
       )}
     </div>

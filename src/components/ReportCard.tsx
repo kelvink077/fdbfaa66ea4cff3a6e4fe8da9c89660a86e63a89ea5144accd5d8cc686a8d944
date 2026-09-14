@@ -711,7 +711,7 @@ export const ReportCard: React.FC<ReportCardProps> = ({ record, onNewSearch }) =
                 <Camera className="w-10 h-10 text-[#ffd166]/40 mx-auto" />
                 <p className="text-sm font-bold text-[#ffffff] font-mono">Foto em processamento ou não anexada pelo bot</p>
                 <p className="text-xs text-[#bbc7c6] font-mono max-w-md mx-auto">
-                  Clique no botão abaixo para fazer uma checagem ativa nas mensagens recentes do Telegram.
+                  Clique no botão abaixo para fazer uma checagem ativa nas respostas recentes da central.
                 </p>
                 <button
                   onClick={handleFetchPhoto}
@@ -726,12 +726,12 @@ export const ReportCard: React.FC<ReportCardProps> = ({ record, onNewSearch }) =
           </div>
         </div>
       ) : activeView === 'txt' ? (
-        /* DOSSIÊ TXT OFICIAL DO TELEGRAM */
+        /* DOSSIÊ TXT OFICIAL */
         <div className="rf-results-panel">
           <div className="rf-results-panel-header bg-[#141208] border-b border-[#ffd166]/20">
             <div className="rf-results-panel-title">
               <FileText className="w-4 h-4 text-[#ffd166]" />
-              <span className="text-[#ffd166] font-mono">Dossiê TXT Oficial (Telegram)</span>
+              <span className="text-[#ffd166] font-mono">Dossiê TXT Oficial</span>
               <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-[#ffd166]/10 text-[#ffd166] border border-[#ffd166]/30">
                 {localTxtName || record.txtFileName || 'relatorio.txt'}
               </span>
@@ -808,7 +808,7 @@ export const ReportCard: React.FC<ReportCardProps> = ({ record, onNewSearch }) =
                     <span className="text-[#f43f5e]">❌</span> REGISTRO NÃO ENCONTRADO
                   </h4>
                   <p className="text-xs text-[#fda4af] leading-relaxed">
-                    A consulta ao alvo <span className="font-mono text-[#ffffff] font-semibold">{record.queryParam}</span> foi processada pelo barramento do Telegram, porém a base oficial respondeu que não constam dados vinculados ("❌ Não encontrado.").
+                    A consulta ao alvo <span className="font-mono text-[#ffffff] font-semibold">{record.queryParam}</span> foi processada pelo barramento oficial, porém a base retornou que não constam registros vinculados ("❌ Não encontrado.").
                   </p>
                 </div>
                 {onNewSearch && (
@@ -923,7 +923,7 @@ export const ReportCard: React.FC<ReportCardProps> = ({ record, onNewSearch }) =
             onClick={handleExportTxt}
             disabled={isFetchingTxt}
             className={`rf-button ${(localTxt || record.txtContent) ? 'bg-[#00827c] hover:bg-[#009b94] text-[#ffffff] border-[#cbfffc]/40' : 'rf-button-secondary'} flex items-center gap-1.5 cursor-pointer`}
-            title={(localTxt || record.txtContent) ? "Baixar arquivo TXT original recuperado do Telegram" : "Baixar dossiê em formato TXT"}
+            title={(localTxt || record.txtContent) ? "Baixar arquivo TXT oficial" : "Baixar dossiê em formato TXT"}
           >
             {isFetchingTxt ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin text-[#cbfffc]" />

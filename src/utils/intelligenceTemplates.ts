@@ -356,7 +356,7 @@ MÓDULO: ${cleanMod.toUpperCase()}
 COMANDO: /${cleanMod} ${formattedParam || cleanParam}
 ALVO CONSULTADO: ${formattedParam || cleanParam}
 SITUAÇÃO NA BASE: REGULAR (CONFIRMADO)
-ROTA TELEGRAM: KREX
+ROTA DA BASE: KREX
 ORIGEM: CLUSTER KREX INTEL B2B
 
 📋 DADOS DE IDENTIFICAÇÃO:
@@ -419,7 +419,7 @@ export function parseIntelligenceResponse(
       items: [
         { label: 'Status da Pesquisa', value: '❌ NÃO ENCONTRADO', highlight: true, status: 'danger' },
         { label: 'Parâmetro Consultado', value: queryParam, highlight: true },
-        { label: 'Comando Telegram', value: telegramCommand },
+        { label: 'Comando de Execução', value: telegramCommand },
         { label: 'Retorno da Base', value: '❌ Não encontrado.', status: 'danger' },
         { label: 'Diagnóstico', value: 'O alvo consultado não possui vínculos, registros ativos ou histórico cadastrado nas bases consultadas.' },
       ],

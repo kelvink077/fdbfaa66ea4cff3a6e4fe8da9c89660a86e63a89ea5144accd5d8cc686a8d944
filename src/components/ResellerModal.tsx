@@ -998,7 +998,7 @@ export const ResellerModal: React.FC<ResellerModalProps> = ({
               rel="noopener noreferrer"
               className="text-[#cbfffc] hover:underline flex items-center gap-1"
             >
-              Telegram Oficial <ExternalLink className="w-3 h-3" />
+              Canal Oficial <ExternalLink className="w-3 h-3" />
             </a>
           </div>
 

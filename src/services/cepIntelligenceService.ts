@@ -4,7 +4,7 @@ export interface CepModuleAuditStatus {
   id: string;
   name: string;
   command: string;
-  channel: 'Telegram Userbot' | 'Barramento PRO' | 'Barramento KREX' | 'Correios / ViaCEP' | 'Smart Maps Lotes';
+  channel: 'Telegram Userbot' | 'Barramento Integrado' | 'Barramento PRO' | 'Barramento KREX' | 'Correios / ViaCEP' | 'Smart Maps Lotes';
   status: 'waiting' | 'in_progress' | 'completed' | 'found';
   itemsFoundCount: number;
   durationMs: number;

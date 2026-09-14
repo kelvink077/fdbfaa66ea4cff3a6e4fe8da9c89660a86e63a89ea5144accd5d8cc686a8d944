@@ -184,9 +184,9 @@ export const CepIntelligenceModal: React.FC<CepIntelligenceModalProps> = ({
       },
       {
         id: 'telegram_cep',
-        name: 'Barramento Telegram GramJS Userbot',
-        command: `MTProto Telegram SendMessage: /cep ${digits}`,
-        channel: 'Telegram Userbot',
+        name: 'Barramento Integrado KREX',
+        command: `Protocolo Direto: /cep ${digits}`,
+        channel: 'Barramento KREX',
         status: 'waiting',
         itemsFoundCount: 0,
         durationMs: 0,
@@ -245,7 +245,7 @@ export const CepIntelligenceModal: React.FC<CepIntelligenceModalProps> = ({
           prev.map((m) => (m.id === 'correios' ? { ...m, status: 'completed', itemsFoundCount: 1, durationMs: 2400 } : m))
         );
       } else if (currentSec === 7) {
-        setScanStepMessage('Disparando comando /cep na Base KREX (GramJS Telegram)...');
+        setScanStepMessage('Disparando comando /cep na Base KREX...');
         setScanModules((prev) =>
           prev.map((m) =>
             m.id === 'krex_cep'
@@ -295,7 +295,7 @@ export const CepIntelligenceModal: React.FC<CepIntelligenceModalProps> = ({
     }
 
     setIsKrexQuerying(true);
-    setScanStepMessage('Consultando Base KREX (/cep) via Telegram GramJS...');
+    setScanStepMessage('Consultando Base KREX (/cep)...');
     try {
       const res = await fetch('/api/cep/krex-scan', {
         method: 'POST',
@@ -875,7 +875,7 @@ export const CepIntelligenceModal: React.FC<CepIntelligenceModalProps> = ({
                       Identificação de Todos que Residem no CEP
                     </h3>
                     <p className="text-sm text-[#a0d2ce] mt-1 leading-relaxed">
-                      Este sistema executa uma varredura cruzada em todos os módulos que suportam CEP no barramento de inteligência (Telegram Userbot, Buscas PRO, KREX/ZYREX, Correios e Cartografia Smart Maps).
+                      Este sistema executa uma varredura cruzada em todos os módulos que suportam CEP no barramento de inteligência (Barramento Integrado, Buscas PRO, KREX/ZYREX, Correios e Cartografia Smart Maps).
                     </p>
                   </div>
                 </div>
@@ -1085,7 +1085,7 @@ export const CepIntelligenceModal: React.FC<CepIntelligenceModalProps> = ({
                   <div>
                     <div className="flex items-center justify-center gap-2 mb-1.5">
                       <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded bg-[#003833] text-[#79fbf5] border border-[#00827c]">
-                        Base KREX • Telegram GramJS
+                        Base KREX • Protocolo Direto
                       </span>
                     </div>
                     <h3 className="text-base sm:text-lg font-bold text-white">
@@ -1716,11 +1716,11 @@ NOTAS: ${selectedDossier.notes}
                         Console Oficial da Base KREX
                       </h3>
                       <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700">
-                        GramJS Telegram MTProto
+                        Protocolo Direto de Inteligência
                       </span>
                     </div>
                     <p className="text-xs text-[#a0d2ce] mt-0.5">
-                      Visualização em tempo real do texto bruto recebido do robô Telegram (@krex / @zyrex) para o módulo CEP.
+                      Visualização em tempo real do texto bruto recebido da central KREX/ZYREX para o módulo CEP.
                     </p>
                   </div>
                 </div>
@@ -1773,12 +1773,12 @@ NOTAS: ${selectedDossier.notes}
                 </div>
               </div>
 
-              {/* Caixa de Texto do Telegram */}
+              {/* Caixa de Texto do Dossiê */}
               <div className="rounded-xl bg-[#000e0d] border border-[#003833] overflow-hidden shadow-2xl flex flex-col">
                 <div className="px-4 py-2.5 bg-[#001716] border-b border-[#002b28] flex items-center justify-between text-xs text-[#a0d2ce]">
                   <div className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                    <span className="font-mono text-[#79fbf5] font-bold">telegram_bot_response.log</span>
+                    <span className="font-mono text-[#79fbf5] font-bold">dossie_bruto_resposta.log</span>
                   </div>
                   {krexRawResponse && (
                     <button

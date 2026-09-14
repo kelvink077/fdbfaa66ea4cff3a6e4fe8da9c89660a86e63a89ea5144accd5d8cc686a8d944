@@ -275,7 +275,7 @@ export default function App() {
         setTelegramConfig((prev) => ({
           ...prev,
           userbotStatus: data.userbotStatus || 'error',
-          lastError: data.error || 'Falha ao reconectar ao Telegram.',
+          lastError: data.error || 'Falha ao restabelecer conexão com a central.',
         }));
       }
     } catch (e: any) {
@@ -442,7 +442,7 @@ export default function App() {
           options: data.options,
           selectedOption: data.selectedOption,
         });
-        setLoadingStepText('Opções de base recebidas do Telegram! Selecione a base desejada...');
+        setLoadingStepText('Opções de base recebidas! Selecione a base desejada...');
       }
     });
 
@@ -584,14 +584,36 @@ export default function App() {
 
     // When completed globally
     socketInstance.on('query:completed_broadcast', (data: any) => {
+      console.log('[Socket.io Client] query:completed_broadcast recebido:', data);
       setPendingQueries((prev) => prev.filter((p) => p.id !== data.id));
-      if (data.txtContent) {
-        setCurrentActiveRecord((prev) => {
-          if (prev && prev.id === data.id) {
-            return { ...prev, txtContent: data.txtContent, txtFileName: data.txtFileName };
-          }
-          return prev;
-        });
+
+      // Se a consulta concluída for a que estamos aguardando, encerra o carregamento e renderiza o dossiê
+      if (!currentPendingIdRef.current || currentPendingIdRef.current === data.id) {
+        setIsLoading(false);
+        setActiveOptionsData(null);
+        if (autoSimulateTimerRef.current) {
+          clearTimeout(autoSimulateTimerRef.current);
+          autoSimulateTimerRef.current = null;
+        }
+        currentPendingIdRef.current = null;
+
+        const isNotFound = 
+          Boolean(data.isNotFound) ||
+          data.exactMatch?.status === 'not_found' ||
+          data.exactMatch?.isNegativeReported ||
+          /n[ãa]o encontrado|nao encontrado|nada consta|n[ãa]o localizado|nenhum registro|❌/i.test(data.rawResponse || '');
+
+        const parsed = parseIntelligenceResponse(data.rawResponse || '', data.moduleType, data.queryParam);
+        const completeRecord: QueryRecord = {
+          ...data,
+          status: data.status || 'completed',
+          isNotFound,
+          parsedReport: parsed,
+        };
+
+        setCurrentActiveRecord(completeRecord);
+        setHistory((prev) => [completeRecord, ...prev.filter((h) => h.id !== completeRecord.id)]);
+      } else {
         setHistory((prev) =>
           prev.map((item) =>
             item.id === data.id ? { ...item, ...data } : item
@@ -938,7 +960,7 @@ export default function App() {
 
     setIsLoading(true);
     setActiveOptionsData(null);
-    setLoadingStepText('Enviando /start para reiniciar o robô no Telegram...');
+    setLoadingStepText('Reiniciando conexão com o barramento de dados...');
 
     const isZyrex = Boolean(
       isZyrexParam || 
@@ -997,7 +1019,7 @@ export default function App() {
   const handleSelectOption = async (optionText: string, rowIndex?: number, colIndex?: number) => {
     if (!activeOptionsData) return;
     const { requestId } = activeOptionsData;
-    setLoadingStepText(`Base "${optionText}" selecionada! Consultando dados oficiais no Telegram...`);
+    setLoadingStepText(`Base "${optionText}" selecionada! Consultando dados cadastrais oficiais...`);
     setActiveOptionsData((prev) => prev ? { ...prev, selectedOption: optionText } : null);
 
     // 1. Emite via Socket.io
@@ -1189,7 +1211,7 @@ export default function App() {
                         {loadingStepText}
                       </h3>
                       <p className="text-xs text-[#bbc7c6] uppercase tracking-[0.08em] font-mono mt-1">
-                        Telegram Gateway ➔ Telegram Bot ➔ Recepção de Opções / Dossiê
+                        Conexão Segura ➔ Barramento Oficial ➔ Recepção de Opções / Dossiê
                       </p>
                     </div>
 

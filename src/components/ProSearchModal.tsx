@@ -626,7 +626,7 @@ export const ProSearchModal: React.FC<ProSearchModalProps> = ({
                     <button
                       onClick={() => handleDownloadPhoto()}
                       className="px-2.5 py-1.5 rounded-[6px] bg-[#ffd166] hover:bg-[#e6be5c] text-[#0f172a] font-bold text-xs font-mono transition-colors cursor-pointer flex items-center gap-1.5 shadow"
-                      title="Baixar a imagem / foto original retornada pelo Telegram"
+                      title="Baixar a imagem / foto original do documento"
                     >
                       <Camera className="w-3.5 h-3.5" />
                       <span>Baixar Foto (JPG)</span>
@@ -637,7 +637,7 @@ export const ProSearchModal: React.FC<ProSearchModalProps> = ({
                     onClick={handleDownloadTxt}
                     disabled={isDownloadingTxt}
                     className="px-2.5 py-1.5 rounded-[6px] bg-[#011d1c] hover:bg-[#004743] text-[#ffd166] border border-[#ffd166]/40 text-xs font-mono transition-colors cursor-pointer flex items-center gap-1.5"
-                    title="Baixar arquivo TXT retornado pelo Telegram"
+                    title="Baixar arquivo TXT do dossiê oficial"
                   >
                     {isDownloadingTxt ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
