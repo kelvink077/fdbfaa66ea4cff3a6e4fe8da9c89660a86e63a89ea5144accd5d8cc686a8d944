@@ -46,6 +46,7 @@ if (fs.existsSync(envFilePath)) {
 const PORT = 3000;
 
 const app = express();
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 
 // =============================================================

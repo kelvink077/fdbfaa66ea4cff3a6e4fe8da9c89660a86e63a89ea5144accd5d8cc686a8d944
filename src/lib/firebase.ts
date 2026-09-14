@@ -24,7 +24,8 @@ import {
   increment,
   onSnapshot
 } from 'firebase/firestore';
-import firebaseConfig from '../../firebase-applet-config.json';
+import { firebaseConfig } from './firebaseConfig';
+import { markReferralAsPaid } from './resellerService';
 
 // Initialize Firebase App
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
@@ -476,7 +477,6 @@ export async function creditUserPlanValidity(
 
     // Libera a comissão de 15% para o revendedor responsável caso o usuário tenha sido indicado
     try {
-      const { markReferralAsPaid } = await import('./resellerService');
       await markReferralAsPaid(userId, planId, paymentInfo.amount, paymentInfo.payerDocument);
     } catch (refErr) {
       console.warn('[Referral] Erro ao creditar comissão do revendedor:', refErr);

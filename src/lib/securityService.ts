@@ -37,6 +37,22 @@ export const securityHeaders = helmet({
 });
 
 /**
+ * Helper para extrair o IP real do cliente atrás de proxies/CDNs (Cloud Run, Nginx, Netlify)
+ */
+export const getClientIp = (req: Request): string => {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string') {
+    return forwarded.split(',')[0].trim();
+  }
+  const fwdStandard = req.headers['forwarded'];
+  if (typeof fwdStandard === 'string') {
+    const match = fwdStandard.match(/for="?([^;,\s"]+)"?/i);
+    if (match && match[1]) return match[1];
+  }
+  return req.ip || req.socket.remoteAddress || '127.0.0.1';
+};
+
+/**
  * Rate Limiter Global para rotas de API (200 reqs / 15 min)
  */
 export const globalApiLimiter = rateLimit({
@@ -44,6 +60,12 @@ export const globalApiLimiter = rateLimit({
   max: 200,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => getClientIp(req as Request),
+  validate: {
+    xForwardedForHeader: false,
+    forwardedHeader: false,
+    default: false,
+  },
   message: {
     ok: false,
     error: 'Limite de requisições excedido. Tente novamente em alguns minutos.',
@@ -58,6 +80,12 @@ export const queryLimiter = rateLimit({
   max: 60,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => getClientIp(req as Request),
+  validate: {
+    xForwardedForHeader: false,
+    forwardedHeader: false,
+    default: false,
+  },
   message: {
     ok: false,
     error: 'Limite de consultas atingido para este IP. Aguarde antes de realizar novas buscas.',
@@ -78,8 +106,7 @@ export const geoIpFilter = (req: Request, res: Response, next: NextFunction) => 
     return next();
   }
 
-  const forwarded = req.headers['x-forwarded-for'];
-  const rawIp = typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : req.socket.remoteAddress || '';
+  const rawIp = getClientIp(req);
   
   // IPs locais ou privados
   if (
