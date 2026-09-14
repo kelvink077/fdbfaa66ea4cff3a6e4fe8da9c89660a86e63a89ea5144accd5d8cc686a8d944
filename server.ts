@@ -63,17 +63,18 @@ const KNOWN_REVOKED_SESSIONS = new Set<string>([
   '1AQAOMTQ5LjE1NC4xNzUuNTIBu5YKHcvxEcuIMtKL0oc/hLO47bwJQKaa09dFqT9SkD4oXt/ZkeNJE0we5kLLmdzbSQ5sh+Q6OdBoEmUAhZKJl1V2/zU85jqwHILczdHDLlSbMHQ5tBn1P9/OPTtwyDwD/NR0ziRLyeb6liTAmG8pbk2T9A/64LFoS32Nv0CrhNqB4/FHgN3d7m9/J/i9RtFOtr6CmGtijre/5Vprgt+cIm/UX56IClX5edGtct5aULSb8fz358flBVGbgY+hsIzftN5/jv4qn4hQ/tWLQHgw5E4jR5Lqd3ayQW/k00Cm1kzBkVLLQdjSh9jnQYFOUWWyEBPfWZdVKu8ui5p5uZjM0Nk=',
 ]);
 
-let TELEGRAM_STRING_SESSION = (process.env.TELEGRAM_STRING_SESSION || '').trim();
+const DEFAULT_STRING_SESSION = '1AQAOMTQ5LjE1NC4xNzUuNTEBuwjOeyrM51TuOj1h2nbhka/szrsYXni5bsDf7q7U0iiMHTPVRH11MPItgLG3WJrEIvT6lDemGH+MVWA3qJ2SlkY46drToyVXlBnKj3h+Do2FS5ep9l8RLJcXKspMkpizjy7s9/qvxm3lG44v2AemRi3eOihD0+4LpIbSbAb8f4pFl+MsaHfVC9vzrK7vjUukqXiSTd3J+hn1zl+ipNQb2GAXXUit3hsbSGh47rQ0l2WiSy1KbaQrvzER8S8xoIC+b2AoRimUise7YmHReDmShzzD2G3W+pDxmJX3dlcFPQklgdXHElQe7UN8unuK80bhPZzLILTM0txIJXNVz5l9N+8=';
+let TELEGRAM_STRING_SESSION = (process.env.TELEGRAM_STRING_SESSION || DEFAULT_STRING_SESSION).trim();
 if (KNOWN_REVOKED_SESSIONS.has(TELEGRAM_STRING_SESSION)) {
-  TELEGRAM_STRING_SESSION = '';
+  TELEGRAM_STRING_SESSION = DEFAULT_STRING_SESSION;
 }
-const TELEGRAM_PHONE_NUMBER = process.env.TELEGRAM_PHONE_NUMBER || '';
+const TELEGRAM_PHONE_NUMBER = process.env.TELEGRAM_PHONE_NUMBER || '+5531981219991';
 
 // ROTAS DE DESTINO DOS BOTS
 const TELEGRAM_CHAT_ID_OLD = process.env.TELEGRAM_CHAT_ID || ''; // Seu bot normal configurado no Render
 const TELEGRAM_CHAT_ID_PRO = process.env.TELEGRAM_CHAT_ID_PRO || '@Hgliopk00bot'; // Rota via @username (Módulo Avançado)
 const TARGET_BOT_PRO_ID_NUM = process.env.TARGET_BOT_PRO_ID_NUM || '7565502829';   // ID numérico do bot PRO para leitura das respostas
-const TELEGRAM_CHAT_ID_KREX = process.env.TELEGRAM_CHAT_ID_KREX || process.env.TELEGRAM_CHAT_ID_ZYREX || 'KREX'; // Rota exclusiva Buscas KREX (KREX)
+const TELEGRAM_CHAT_ID_KREX = process.env.TELEGRAM_CHAT_ID_KREX || process.env.TELEGRAM_CHAT_ID_ZYREX || (TELEGRAM_CHAT_ID_OLD && TELEGRAM_CHAT_ID_OLD !== 'KREX' ? TELEGRAM_CHAT_ID_OLD : '@SkynetBlackRobot'); // Rota exclusiva Buscas KREX
 const TELEGRAM_CHAT_ID_ZYREX = TELEGRAM_CHAT_ID_KREX;
 
 // =============================================================
@@ -93,6 +94,8 @@ const authorizedBotUsernames = new Set<string>([
   'hgliopk00bot',
   'krex',
   'zyrexbuscasbot',
+  'skynetblackrobot',
+  'skynet',
   TELEGRAM_CHAT_ID_PRO.replace('@', '').toLowerCase(),
   TELEGRAM_CHAT_ID_KREX.replace('@', '').toLowerCase(),
   TELEGRAM_CHAT_ID_OLD.replace('@', '').toLowerCase(),
@@ -112,74 +115,119 @@ function registerAuthorizedBot(id?: string | number, username?: string) {
 function isMessageFromAuthorizedBot(message: any): boolean {
   if (!message) return false;
 
-  // 1. REJEIÇÃO TOTAL E IMEDIATA: Grupos, canais e supergrupos da conta
-  if (message.isGroup || message.isChannel) {
-    return false;
-  }
-  if (message.isPrivate === false) {
-    return false;
-  }
-  if (message.peerId) {
-    const pType = message.peerId.className || message.peerId.constructor?.name || '';
-    if (pType === 'PeerChannel' || pType === 'PeerChat') {
-      return false;
-    }
+  const incomingText = (message.message || message.text || '').trim();
+  let rawSenderUsername = (message.sender?.username || message.chat?.username || '').toLowerCase().replace('@', '');
+  
+  // Extrai nome de robô se vier em "BY: @SkynetBlackRobot" ou no corpo da mensagem
+  const byMatch = incomingText.match(/BY:\s*@([A-Za-z0-9_]+)/i);
+  const byUsername = byMatch ? byMatch[1].toLowerCase() : '';
+  if (byUsername) {
+    if (!rawSenderUsername) rawSenderUsername = byUsername;
+    authorizedBotUsernames.add(byUsername);
   }
 
-  // 2. Extrai identificadores do remetente
   const senderId = message.senderId ? String(message.senderId) : (message.fromId?.userId ? String(message.fromId.userId) : '');
   const peerUserId = message.peerId?.userId ? String(message.peerId.userId) : '';
-  const chatId = message.chatId ? String(message.chatId) : '';
+  const chatId = message.chatId ? String(message.chatId) : (message.peerId?.chatId ? String(message.peerId.chatId) : (message.peerId?.channelId ? String(message.peerId.channelId) : ''));
   const cleanSenderId = senderId.replace(/^-100/, '').replace(/^-/, '');
   const cleanPeerUserId = peerUserId.replace(/^-100/, '').replace(/^-/, '');
   const cleanChatId = chatId.replace(/^-100/, '').replace(/^-/, '');
-
-  // 3. Verifica IDs numéricos
   const ids = [cleanSenderId, cleanPeerUserId, cleanChatId, senderId, peerUserId, chatId].filter(Boolean);
+
+  // 1. VERIFICAÇÃO PRIORITÁRIA DE CONSULTA ATIVA PENDENTE NO SISTEMA:
+  // Se existe consulta em andamento, verifica se a mensagem recebida (seja de grupo, canal ou privado)
+  // corresponde diretamente ao alvo ou responde à mensagem enviada pelo robô
+  if (activeQueries.size > 0) {
+    const fullSearchCorpus = `${incomingText} ${message.media?.document?.attributes?.[0]?.fileName || ''}`.toLowerCase();
+    const corpusDigitsOnly = fullSearchCorpus.replace(/\D/g, '');
+
+    for (const q of activeQueries.values()) {
+      const cleanTarget = (q.cleanedTarget || q.queryParam.replace(/\D/g, '')).toLowerCase();
+      // Correspondência por CPF/Telefone/Placa/Dígitos
+      if (cleanTarget && cleanTarget.length >= 4) {
+        if (fullSearchCorpus.includes(cleanTarget) || (corpusDigitsOnly.length >= 4 && corpusDigitsOnly.includes(cleanTarget))) {
+          if (rawSenderUsername) registerAuthorizedBot(senderId, rawSenderUsername);
+          return true;
+        }
+      }
+      // Correspondência textual pelo parâmetro original
+      if (q.queryParam && q.queryParam.length >= 3 && fullSearchCorpus.includes(q.queryParam.toLowerCase())) {
+        if (rawSenderUsername) registerAuthorizedBot(senderId, rawSenderUsername);
+        return true;
+      }
+      // Correspondência por ID de mensagem de resposta direta
+      const replyToId = message.replyTo?.replyToMsgId || message.replyToMsgId;
+      if (replyToId && (replyToId === q.telegramMessageId || replyToId === (q as any).menuMessageId)) {
+        if (rawSenderUsername) registerAuthorizedBot(senderId, rawSenderUsername);
+        return true;
+      }
+    }
+
+    // Se o texto contém cabeçalhos inequívocos de dossiê cadastral de robô de buscas
+    if (
+      isRecognizedBotDossierContent(incomingText) || 
+      /BY:\s*@/i.test(incomingText) || 
+      /CONSULTA\s+DE/i.test(incomingText) ||
+      incomingText.toLowerCase().includes('skynet') ||
+      incomingText.toLowerCase().includes('krex') ||
+      incomingText.toLowerCase().includes('zyrex')
+    ) {
+      if (rawSenderUsername) registerAuthorizedBot(senderId, rawSenderUsername);
+      return true;
+    }
+  }
+
+  // 2. Reconhecimento de bot conhecido por username ou flag bot
+  const isKnownBot = 
+    message.sender?.bot === true ||
+    rawSenderUsername.includes('bot') || 
+    rawSenderUsername.includes('robot') || 
+    rawSenderUsername.includes('skynet') ||
+    rawSenderUsername.includes('hgliopk00bot') ||
+    rawSenderUsername.includes('krex') ||
+    rawSenderUsername.includes('zyrex') ||
+    byUsername.includes('skynet') ||
+    byUsername.includes('krex') ||
+    byUsername.includes('zyrex') ||
+    incomingText.toLowerCase().includes('skynetblackrobot');
+
+  if (isKnownBot) {
+    if (rawSenderUsername) registerAuthorizedBot(senderId, rawSenderUsername);
+    return true;
+  }
+
+  // 3. IDs numéricos autorizados na lista branca
   for (const id of ids) {
     if (authorizedBotIds.has(id)) return true;
   }
 
-  // 4. Verifica usernames conhecidos
-  const senderUsername = (message.sender?.username || message.chat?.username || '').toLowerCase().replace('@', '');
-  if (senderUsername && authorizedBotUsernames.has(senderUsername)) {
+  // 4. Usernames autorizados na lista branca
+  if (rawSenderUsername && authorizedBotUsernames.has(rawSenderUsername)) {
     return true;
   }
 
-  // 5. Verifica correspondência com os bots Pro, Krex e Old configurados
-  const isPro = [TARGET_BOT_PRO_ID_NUM, 'hgliopk00bot', '7565502829'].some((p) =>
-    ids.some((id) => id.includes(p)) || (senderUsername && senderUsername.includes(p))
-  );
-  if (isPro) return true;
-
-  const isZyrex = ['krex', 'zyrexbuscasbot', '7912205816'].some((z) =>
-    ids.some((id) => id.includes(z)) || (senderUsername && senderUsername.includes(z))
-  );
-  if (isZyrex) return true;
-
-  const oldBotClean = TELEGRAM_CHAT_ID_OLD.replace('@', '').toLowerCase();
-  if (oldBotClean && (ids.some((id) => id.toLowerCase().includes(oldBotClean)) || (senderUsername && senderUsername.includes(oldBotClean)))) {
+  // 5. Configuração explícita de chat do Telegram (.env)
+  const oldChatClean = TELEGRAM_CHAT_ID_OLD.replace('@', '').toLowerCase();
+  if (oldChatClean && (ids.some(id => id.toLowerCase().includes(oldChatClean)) || rawSenderUsername.includes(oldChatClean))) {
     return true;
   }
 
-  // 6. Autorização dinâmica por consulta ativa pendente em chat privado
-  if (activeQueries.size > 0) {
-    for (const q of activeQueries.values()) {
-      const qPeer = (q as any).targetPeerId;
-      const qChat = (q as any).targetChatId;
-      if (qPeer && ids.some((id) => id === String(qPeer))) return true;
-      if (qChat) {
-        const cleanTarget = String(qChat).replace('@', '').toLowerCase();
-        if (ids.some((id) => id.toLowerCase().includes(cleanTarget)) || (senderUsername && senderUsername.includes(cleanTarget))) {
-          return true;
-        }
+  // 6. Chat de destino das consultas ativas
+  for (const q of activeQueries.values()) {
+    const qPeer = (q as any).targetPeerId;
+    const qChat = (q as any).targetChatId;
+    if (qPeer && ids.some(id => id === String(qPeer))) return true;
+    if (qChat) {
+      const cleanTarget = String(qChat).replace('@', '').toLowerCase();
+      if (ids.some(id => id.toLowerCase().includes(cleanTarget)) || (rawSenderUsername && rawSenderUsername.includes(cleanTarget))) {
+        return true;
       }
     }
-    // Se for mensagem 1-a-1 de usuário/bot (PeerUser) com consulta ativa aguardando resposta
-    const isPeerUser = message.peerId?.className === 'PeerUser' || message.peerId?.constructor?.name === 'PeerUser' || Boolean(message.peerId?.userId);
-    if (isPeerUser) {
-      return true;
-    }
+  }
+
+  // 7. Mensagem 1-a-1 de usuário ou bot em chat privado durante consulta ativa
+  if (activeQueries.size > 0 && (message.isPrivate || message.peerId?.className === 'PeerUser')) {
+    return true;
   }
 
   return false;
@@ -710,14 +758,17 @@ async function resolveTelegramPeer(client: TelegramClient, targetId: any) {
     clean.toLowerCase() === 'krex' ||
     clean === '@ZyrexBuscasBot' ||
     clean === 'ZyrexBuscasBot' ||
+    clean === '@SkynetBlackRobot' ||
+    clean === 'SkynetBlackRobot' ||
+    clean.toLowerCase().includes('skynet') ||
     clean.toLowerCase().includes('krex') ||
-    clean.toLowerCase().includes('zyrexbuscasbot');
+    clean.toLowerCase().includes('zyrex');
 
   if (isZyrexTarget) {
     if (cachedZyrexBotPeer) {
       return cachedZyrexBotPeer;
     }
-    const candidates = ['KREX', 'ZyrexBuscasBot'];
+    const candidates = ['SkynetBlackRobot', 'ZyrexBuscasBot', 'KREX'];
     for (const cand of candidates) {
       try {
         const res: any = await client.invoke(new Api.contacts.ResolveUsername({ username: cand }));
@@ -735,7 +786,7 @@ async function resolveTelegramPeer(client: TelegramClient, targetId: any) {
         console.warn(`[GramJS] ResolveUsername RPC ${cand}:`, rpcErr?.message);
       }
     }
-    for (const cand of ['KREX', '@KREX', '@ZyrexBuscasBot']) {
+    for (const cand of ['@SkynetBlackRobot', 'SkynetBlackRobot', '@ZyrexBuscasBot', 'KREX', '@KREX']) {
       try {
         const entity: any = await client.getEntity(cand);
         if (entity) {
@@ -749,14 +800,31 @@ async function resolveTelegramPeer(client: TelegramClient, targetId: any) {
       const dialogs = await client.getDialogs({ limit: 100 });
       for (const d of dialogs) {
         const entity: any = d.entity;
-        if (entity && (entity.username?.toLowerCase() === 'krex' || entity.username?.toLowerCase() === 'zyrexbuscasbot')) {
+        const uName = (entity?.username || '').toLowerCase();
+        const title = (entity?.title || '').toLowerCase();
+        const cleanOld = TELEGRAM_CHAT_ID_OLD.replace('@', '').replace(/^-100/, '').replace(/^-/, '').toLowerCase();
+        if (
+          entity && (
+            uName.includes('skynet') ||
+            uName.includes('krex') ||
+            uName.includes('zyrex') ||
+            title.includes('skynet') ||
+            title.includes('olho de deus') ||
+            title.includes('krex') ||
+            title.includes('zyrex') ||
+            (cleanOld && (String(entity.id).includes(cleanOld) || uName.includes(cleanOld)))
+          )
+        ) {
           registerAuthorizedBot(entity.id, entity.username);
           cachedZyrexBotPeer = d.inputEntity || entity;
           return cachedZyrexBotPeer;
         }
       }
     } catch {}
-    return 'KREX';
+    if (TELEGRAM_CHAT_ID_OLD && TELEGRAM_CHAT_ID_OLD !== 'KREX') {
+      return await resolveTelegramPeer(client, TELEGRAM_CHAT_ID_OLD);
+    }
+    return '@SkynetBlackRobot';
   }
 
   // Resolução para o Bot Padrão (Old Bot)
@@ -1324,19 +1392,31 @@ async function executeOptionSelection(
             // 1. A mensagem de menu original foi editada com o dossiê real
             if (rm.id === menuMsg.id && rmText && !isInteractiveSelectionMenu(rmText, rmButtons) && !isTransientProgressMessage(rmText)) {
               console.log(`[GramJS] 🔄 Mensagem do menu foi editada pelo bot com novos dados (${rmText.slice(0, 40)}...)!`);
-              await handleUserbotIncomingMessage({ message: rm });
+              handleIncomingTelegramResponse(requestId, rmText, {
+                messageId: rm.id,
+                simulated: false,
+                isPro: Boolean(q.isPro || q.moduleType.startsWith('pro')),
+                isZyrex: Boolean(q.isZyrex || (q as any).isKrex || q.moduleType.startsWith('zyrex') || q.moduleType.startsWith('krex')),
+              });
               return { ok: true };
             }
 
             // 2. Nova mensagem chegou com o resultado da consulta
             if (rm.id !== menuMsg.id && rmText && !isInteractiveSelectionMenu(rmText, rmButtons) && !isTransientProgressMessage(rmText)) {
               const cleanTarget = (q.cleanedTarget || q.queryParam.replace(/\D/g, '')).toLowerCase();
-              if (
-                (cleanTarget && cleanTarget.length >= 3 && rmText.toLowerCase().includes(cleanTarget)) ||
-                isRecognizedBotDossierContent(rmText)
-              ) {
+              const replyToId = rm.replyTo?.replyToMsgId || rm.replyToMsgId;
+              const isDirectReply = replyToId && (replyToId === q.telegramMessageId || replyToId === menuMsg.id);
+              const hasTarget = cleanTarget && cleanTarget.length >= 3 && rmText.toLowerCase().includes(cleanTarget);
+              const isDossier = isRecognizedBotDossierContent(rmText) || rmText.includes('BY: @') || rmText.includes('• NOME:') || rmText.includes('• CPF:') || rmText.toLowerCase().includes('skynet');
+
+              if (isDirectReply || hasTarget || isDossier) {
                 console.log(`[GramJS] 📨 Nova mensagem com resultado detectada após seleção de "${optionText}"!`);
-                await handleUserbotIncomingMessage({ message: rm });
+                handleIncomingTelegramResponse(requestId, rmText, {
+                  messageId: rm.id,
+                  simulated: false,
+                  isPro: Boolean(q.isPro || q.moduleType.startsWith('pro')),
+                  isZyrex: Boolean(q.isZyrex || (q as any).isKrex || q.moduleType.startsWith('zyrex') || q.moduleType.startsWith('krex')),
+                });
                 return { ok: true };
               }
             }
@@ -1346,7 +1426,14 @@ async function executeOptionSelection(
               const doc = await extractTxtDocument(userbotClient, rm);
               if (doc) {
                 console.log(`[GramJS] 📄 Documento TXT detectado após seleção de "${optionText}"!`);
-                await handleUserbotIncomingMessage({ message: rm });
+                handleIncomingTelegramResponse(requestId, doc.content || rmText || 'Dossiê em arquivo anexo.', {
+                  messageId: rm.id,
+                  simulated: false,
+                  txtContent: doc.content,
+                  txtFileName: doc.fileName,
+                  isPro: Boolean(q.isPro || q.moduleType.startsWith('pro')),
+                  isZyrex: Boolean(q.isZyrex || (q as any).isKrex || q.moduleType.startsWith('zyrex') || q.moduleType.startsWith('krex')),
+                });
                 return { ok: true };
               }
             }
@@ -1437,6 +1524,13 @@ function isRecognizedBotDossierContent(text: string): boolean {
     /credilink/i.test(t) ||
     /krex/i.test(t) ||
     /zyrex/i.test(t) ||
+    /skynet/i.test(t) ||
+    /consulta\s+de/i.test(t) ||
+    /idade\s*:\s*\d+/i.test(t) ||
+    /signo\s*:/i.test(t) ||
+    /sexo\s*:/i.test(t) ||
+    /by:\s*@/i.test(t) ||
+    /usu[aá]rio\s*:/i.test(t) ||
     (t.length > 80 && t.split('\n').length >= 3)
   );
 }
@@ -1512,15 +1606,18 @@ async function handleUserbotIncomingMessage(event: any) {
     const senderUsername = (message.sender?.username || message.chat?.username || '').toLowerCase().replace('@', '');
 
     const oldBotCleanId = TELEGRAM_CHAT_ID_OLD.replace('@', '').toLowerCase(); 
-    const isFromOldBot = Boolean(oldBotCleanId && (senderId.toLowerCase().includes(oldBotCleanId) || chatId.toLowerCase().includes(oldBotCleanId) || peerUserId.toLowerCase().includes(oldBotCleanId)));
+    const isFromOldBot = Boolean(
+      (oldBotCleanId && (senderId.toLowerCase().includes(oldBotCleanId) || chatId.toLowerCase().includes(oldBotCleanId) || peerUserId.toLowerCase().includes(oldBotCleanId) || senderUsername.includes(oldBotCleanId))) ||
+      senderUsername.includes('skynet')
+    );
     
     const isFromProBot = [TARGET_BOT_PRO_ID_NUM, 'hgliopk00bot', '7565502829'].some(id => 
-      senderId.toLowerCase().includes(id) || chatId.toLowerCase().includes(id) || peerUserId.toLowerCase().includes(id)
+      senderId.toLowerCase().includes(id) || chatId.toLowerCase().includes(id) || peerUserId.toLowerCase().includes(id) || senderUsername.includes(id)
     );
 
-    const isFromZyrexBot = ['krex', 'zyrexbuscasbot', '7912205816'].some(id =>
-      senderId.toLowerCase().includes(id) || chatId.toLowerCase().includes(id) || peerUserId.toLowerCase().includes(id)
-    );
+    const isFromZyrexBot = ['krex', 'zyrexbuscasbot', '7912205816', 'skynetblackrobot', 'skynet'].some(id =>
+      senderId.toLowerCase().includes(id) || chatId.toLowerCase().includes(id) || peerUserId.toLowerCase().includes(id) || senderUsername.includes(id)
+    ) || incomingText.toLowerCase().includes('skynet') || incomingText.toLowerCase().includes('krex') || incomingText.toLowerCase().includes('zyrex') || /by:\s*@/i.test(incomingText);
 
     // Se não temos nenhuma consulta ativa nem histórico recente, descarta
     if (activeQueries.size === 0 && queryHistory.length === 0) {

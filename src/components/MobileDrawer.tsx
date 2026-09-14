@@ -18,6 +18,7 @@ import {
 import { QueryModuleType } from '../types';
 import { QUERY_MODULES } from '../utils/modulesData';
 import { ShazamLogo } from './ShazamLogo';
+import { AuroraCurtainCanvas } from './AuroraCurtainCanvas';
 
 interface MobileDrawerProps {
   isOpen: boolean;
@@ -115,10 +116,13 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
         onClick={onClose}
       />
 
-      {/* Drawer content */}
-      <div className="relative w-full max-w-[320px] bg-[#011d1c] border-r border-[#003734] h-full flex flex-col justify-between shadow-2xl z-10 animate-in slide-in-from-left duration-200">
+      {/* Drawer content with Desktop Column Style & Aurora Canvas */}
+      <div className="relative w-full max-w-[320px] bg-[#011d1c] border-r border-[#003734] h-full flex flex-col justify-between shadow-2xl z-10 animate-in slide-in-from-left duration-200 overflow-hidden">
+        {/* Dynamic 60fps Silk Aurora Curtains Canvas Engine */}
+        <AuroraCurtainCanvas />
+
         {/* Header */}
-        <div className="p-4 border-b border-[#003734] flex items-center justify-between bg-[#012624]">
+        <div className="relative z-10 p-4 border-b border-[#003734] flex items-center justify-between bg-[#012624]/90 backdrop-blur-md">
           <div className="flex items-center gap-2.5">
             <ShazamLogo size="sm" isPulseSpeedFast={true} />
             <div>
@@ -141,7 +145,7 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
         </div>
 
         {/* Quick VIP Actions */}
-        <div className="p-3 border-b border-[#003734] space-y-2 bg-[#011d1c]">
+        <div className="relative z-10 p-3 border-b border-[#003734] space-y-2 bg-[#011d1c]/80 backdrop-blur-sm">
           <div className="grid grid-cols-2 gap-2">
             {onOpenProModal && (
               <button
@@ -173,16 +177,32 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
           </div>
         </div>
 
-        {/* Module lists */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-5">
+        {/* Module lists (Desktop Column Style) */}
+        <div className="relative z-10 flex-1 overflow-y-auto p-4 space-y-6">
+          {/* Plan / Protocol Surface Card (Liquid Kelp #003734, matching Desktop Sidebar) */}
+          <div className="p-4 rounded-[14px] bg-[#003734]/90 backdrop-blur-[4px] border border-[#707777]/20">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[10px] uppercase tracking-[0.15em] text-[#edfffe] font-medium flex items-center gap-2 font-mono">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#cbfffc] animate-pulse"></span>
+                SHAZAM PROTOCOL
+              </span>
+              <span className="text-[9px] uppercase tracking-[0.12em] px-2 py-0.5 rounded-[6px] bg-[#012624] text-[#cbfffc] font-medium border border-[#00827c]/40 font-mono">
+                PREMIUM
+              </span>
+            </div>
+            <p className="text-xs text-[#bbc7c6] leading-relaxed">
+              Ingestão e despacho de inteligência investigativa Shazam Buscas em tempo real e alta disponibilidade.
+            </p>
+          </div>
+
           {/* Section 1: Pessoas Físicas (CPF) */}
-          <div className="space-y-1.5">
-            <div className="px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-[#cbfffc] font-semibold flex items-center justify-between font-mono">
+          <div className="space-y-2">
+            <div className="px-2 py-1 text-[11px] uppercase tracking-[0.12em] text-[#edfffe] font-medium flex items-center justify-between">
               <span>Pessoas Físicas (CPF)</span>
-              <span className="text-[#707777]">3 BASES</span>
+              <span className="text-[#bbc7c6] text-[10px]">3 BASES</span>
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               {cpfModules.map((module) => {
                 const isSelected = selectedModule === module.id;
                 const pendingCount = pendingCountByModule[module.id] || 0;
@@ -191,35 +211,40 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
                 return (
                   <button
                     key={module.id}
+                    id={`mobile-btn-module-${module.id}`}
                     type="button"
                     onClick={() => handleSelect(module.id)}
-                    className={`w-full flex items-center justify-between p-2.5 rounded-[8px] transition-colors cursor-pointer text-left ${
+                    className={`w-full flex items-center justify-between px-3.5 py-3 rounded-[8px] transition-all duration-150 cursor-pointer text-left border ${
                       isSelected
-                        ? 'bg-[#003734] text-[#ffffff] border border-[#00827c]/50'
-                        : 'text-[#bbc7c6] hover:bg-[#012624] hover:text-[#ffffff]'
+                        ? 'bg-[#003734] border-[#00ffa2]/40 text-[#ffffff] shadow-[0_0_12px_rgba(0,255,162,0.15)]'
+                        : 'bg-[#011d1c]/80 hover:bg-[#003734]/70 border-[#003734]/80 hover:border-[#00827c]/60 text-[#bbc7c6] hover:text-[#ffffff] backdrop-blur-[6px]'
                     }`}
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      {getModuleIcon(module.id, isSelected)}
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                          isSelected ? 'bg-[#cbfffc] ring-2 ring-[#00ffa2]/40' : 'bg-[#707777]'
+                        }`}
+                      />
                       <div className="flex flex-col truncate">
                         <div className="flex items-center gap-1.5 truncate">
-                          <span className="truncate text-xs font-semibold">
+                          <span className={`truncate text-[13px] font-medium tracking-tight ${isSelected ? 'text-[#ffffff] font-semibold' : 'text-[#e5eceb]'}`}>
                             {module.title}
                           </span>
                           {module.subtitle && (
-                            <span className={`text-[10px] truncate ${isSelected ? 'text-[#cbfffc]' : 'text-[#79fbf5]/80'}`}>
+                            <span className={`text-[11px] font-normal truncate ${isSelected ? 'text-[#cbfffc]' : 'text-[#79fbf5]/90'}`}>
                               {module.subtitle}
                             </span>
                           )}
                         </div>
-                        <span className="text-[9px] font-mono text-[#707777] uppercase">
+                        <span className={`text-[10px] font-mono uppercase tracking-[0.08em] ${isSelected ? 'text-[#a3e5df]' : 'text-[#8ea3a1]'}`}>
                           {cmd}
                         </span>
                       </div>
                     </div>
 
                     {pendingCount > 0 ? (
-                      <span className="flex h-5 px-1.5 items-center justify-center rounded-[4px] bg-[#00827c] text-[#edfffe] text-[10px] font-mono font-medium">
+                      <span className="flex h-5 px-1.5 items-center justify-center rounded-[6px] bg-[#00827c] text-[#edfffe] text-[10px] font-mono font-medium">
                         {pendingCount}
                       </span>
                     ) : (
@@ -231,14 +256,14 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
             </div>
           </div>
 
-          {/* Section 2: Corporativo & Veicular */}
-          <div className="space-y-1.5">
-            <div className="px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-[#cbfffc] font-semibold flex items-center justify-between font-mono">
+          {/* Section 2: Corporativo & Localização */}
+          <div className="space-y-2">
+            <div className="px-2 py-1 text-[11px] uppercase tracking-[0.12em] text-[#edfffe] font-medium flex items-center justify-between">
               <span>Corporativo & Localização</span>
-              <span className="text-[#707777]">5 BASES</span>
+              <span className="text-[#bbc7c6] text-[10px]">5 BASES</span>
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               {otherModules.map((module) => {
                 const isSelected = selectedModule === module.id;
                 const pendingCount = pendingCountByModule[module.id] || 0;
@@ -247,28 +272,33 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
                 return (
                   <button
                     key={module.id}
+                    id={`mobile-btn-module-${module.id}`}
                     type="button"
                     onClick={() => handleSelect(module.id)}
-                    className={`w-full flex items-center justify-between p-2.5 rounded-[8px] transition-colors cursor-pointer text-left ${
+                    className={`w-full flex items-center justify-between px-3.5 py-3 rounded-[8px] transition-all duration-150 cursor-pointer text-left border ${
                       isSelected
-                        ? 'bg-[#003734] text-[#ffffff] border border-[#00827c]/50'
-                        : 'text-[#bbc7c6] hover:bg-[#012624] hover:text-[#ffffff]'
+                        ? 'bg-[#003734] border-[#00ffa2]/40 text-[#ffffff] shadow-[0_0_12px_rgba(0,255,162,0.15)]'
+                        : 'bg-[#011d1c]/80 hover:bg-[#003734]/70 border-[#003734]/80 hover:border-[#00827c]/60 text-[#bbc7c6] hover:text-[#ffffff] backdrop-blur-[6px]'
                     }`}
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      {getModuleIcon(module.id, isSelected)}
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                          isSelected ? 'bg-[#cbfffc] ring-2 ring-[#00ffa2]/40' : 'bg-[#707777]'
+                        }`}
+                      />
                       <div className="flex flex-col truncate">
-                        <span className="truncate text-xs font-semibold">
+                        <span className={`truncate text-[13px] font-medium tracking-tight ${isSelected ? 'text-[#ffffff] font-semibold' : 'text-[#e5eceb]'}`}>
                           {module.title}
                         </span>
-                        <span className="text-[9px] font-mono text-[#707777] uppercase">
+                        <span className={`text-[10px] font-mono uppercase tracking-[0.08em] ${isSelected ? 'text-[#a3e5df]' : 'text-[#8ea3a1]'}`}>
                           {cmd}
                         </span>
                       </div>
                     </div>
 
                     {pendingCount > 0 ? (
-                      <span className="flex h-5 px-1.5 items-center justify-center rounded-[4px] bg-[#00827c] text-[#edfffe] text-[10px] font-mono font-medium">
+                      <span className="flex h-5 px-1.5 items-center justify-center rounded-[6px] bg-[#00827c] text-[#edfffe] text-[10px] font-mono font-medium">
                         {pendingCount}
                       </span>
                     ) : (
@@ -281,15 +311,21 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="p-3 border-t border-[#003734] bg-[#012624] flex items-center justify-between text-xs">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-[#cbfffc]" />
-            <span className="text-[11px] text-[#bbc7c6] font-mono">SHAZAM PROTOCOL</span>
+        {/* Operator Identity Footer (matching Desktop Sidebar) */}
+        <div className="relative z-10 p-4 border-t border-[#003734] bg-[#011d1c]/90 backdrop-blur-md">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-[6px] bg-[#003734] border border-[#00827c]/40 flex items-center justify-center text-xs font-mono font-bold text-[#cbfffc]">
+              ⚡
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <p className="text-[13px] font-medium text-[#ffffff] truncate">Operador Shazam Buscas</p>
+              <p className="text-[10px] text-[#bbc7c6] uppercase tracking-[0.1em] flex items-center gap-1.5 font-mono">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#cbfffc] animate-pulse"></span>
+                Sessão Autenticada
+              </p>
+            </div>
+            <ShieldCheck className="w-4 h-4 text-[#cbfffc] shrink-0" />
           </div>
-          <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#003734] text-[#cbfffc] font-mono border border-[#00827c]/30">
-            ONLINE
-          </span>
         </div>
       </div>
     </div>

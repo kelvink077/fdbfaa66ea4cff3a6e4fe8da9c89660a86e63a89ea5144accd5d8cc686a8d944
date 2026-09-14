@@ -475,8 +475,18 @@ export default function App() {
         data.rawResponse?.trim() === '🔎 Consultando...';
 
       const parsed = parseIntelligenceResponse(data.rawResponse || '', data.moduleType, data.queryParam);
+      const isZyrex = Boolean(
+        data.isZyrex || 
+        (data as any).isKrex || 
+        String(data.moduleType).toLowerCase().startsWith('zyrex') || 
+        String(data.moduleType).toLowerCase().startsWith('krex') ||
+        String(data.moduleType).toLowerCase().includes('zyrex') || 
+        String(data.moduleType).toLowerCase().includes('krex') ||
+        data.moduleType === 'cep'
+      );
       const completeRecord: QueryRecord = {
         ...data,
+        isZyrex,
         status: isInternalError ? 'error' : (data.status || 'completed'),
         hasInternalError: isInternalError,
         needsRestart: isInternalError,
@@ -604,8 +614,18 @@ export default function App() {
           /n[ãa]o encontrado|nao encontrado|nada consta|n[ãa]o localizado|nenhum registro|❌/i.test(data.rawResponse || '');
 
         const parsed = parseIntelligenceResponse(data.rawResponse || '', data.moduleType, data.queryParam);
+        const isZyrex = Boolean(
+          data.isZyrex || 
+          (data as any).isKrex || 
+          String(data.moduleType).toLowerCase().startsWith('zyrex') || 
+          String(data.moduleType).toLowerCase().startsWith('krex') ||
+          String(data.moduleType).toLowerCase().includes('zyrex') || 
+          String(data.moduleType).toLowerCase().includes('krex') ||
+          data.moduleType === 'cep'
+        );
         const completeRecord: QueryRecord = {
           ...data,
+          isZyrex,
           status: data.status || 'completed',
           isNotFound,
           parsedReport: parsed,

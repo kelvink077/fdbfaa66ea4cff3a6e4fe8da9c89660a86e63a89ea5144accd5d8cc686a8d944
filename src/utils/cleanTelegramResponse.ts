@@ -16,13 +16,18 @@ export function cleanTelegramRawResponse(text: string | null | undefined): strin
   cleaned = cleaned.replace(/[•\-\*]?\s*USU[AÁ]RIO:\s*gencia_web/gim, '');
 
   // 2. Remove linhas com menção do bot (ex: "🔛 BY: @SkynetBlackRobot" ou variações)
-  cleaned = cleaned.replace(/^[🔛\s\-\*]*BY:\s*@?SkynetBlackRobot\s*$/gim, '');
-  cleaned = cleaned.replace(/[🔛\s\-\*]*BY:\s*@?SkynetBlackRobot/gim, '');
+  cleaned = cleaned.replace(/^[🔛\s\-\*]*BY:\s*@?[a-zA-Z0-9_]+\s*$/gim, '');
+  cleaned = cleaned.replace(/[🔛\s\-\*]*BY:\s*@?[a-zA-Z0-9_]+/gim, '');
   cleaned = cleaned.replace(/@SkynetBlackRobot/gim, '');
+  cleaned = cleaned.replace(/@Hgliopk00bot/gim, '');
+  cleaned = cleaned.replace(/@ZyrexBuscasBot/gim, '');
+  cleaned = cleaned.replace(/@KREX/gim, '');
 
   // 3. Remove menções a canais ou bots genéricos de mensagens
   cleaned = cleaned.replace(/@[a-zA-Z0-9_]+(?:bot|robot)/gim, '');
-  cleaned = cleaned.replace(/telegram/gi, 'central');
+  cleaned = cleaned.replace(/telegram\s*gateway/gi, 'Barramento Central');
+  cleaned = cleaned.replace(/telegram\s*bot/gi, 'Motor Cadastral');
+  cleaned = cleaned.replace(/telegram/gi, 'Central');
 
   // 4. Normaliza quebras de linha para evitar lacunas gigantescas após a remoção
   cleaned = cleaned.replace(/\r\n/g, '\n');

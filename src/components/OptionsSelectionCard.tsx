@@ -141,7 +141,7 @@ export const OptionsSelectionCard: React.FC<OptionsSelectionCardProps> = ({
       <div className="p-3.5 rounded-xl bg-[#012624]/90 border border-[#707777]/20 flex items-start gap-3 text-xs font-mono text-[#bbc7c6]">
         <Radio className="w-4 h-4 text-[#79fbf5] shrink-0 mt-0.5 animate-pulse" />
         <div>
-          <span className="text-[#cbfffc] font-semibold">Mensagem do Bot: </span>
+          <span className="text-[#cbfffc] font-semibold">Central de Inteligência: </span>
           <span className="text-[#edfffe]">{promptText || '📋 Clique em um botão abaixo para selecionar a base de dados:'}</span>
         </div>
       </div>

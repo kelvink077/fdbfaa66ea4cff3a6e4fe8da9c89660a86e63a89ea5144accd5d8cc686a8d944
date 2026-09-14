@@ -80,8 +80,15 @@ export const ZyrexSearchModal: React.FC<ZyrexSearchModalProps> = ({
 
   const isCurrentActive = Boolean(
     activeRecord && (
-      String(activeRecord.moduleType).startsWith('zyrex') ||
-      activeRecord.isZyrex
+      Boolean(activeRecord.isZyrex) ||
+      Boolean((activeRecord as any).isKrex) ||
+      String(activeRecord.moduleType).toLowerCase().startsWith('zyrex') ||
+      String(activeRecord.moduleType).toLowerCase().startsWith('krex') ||
+      String(activeRecord.moduleType).toLowerCase().includes('zyrex') ||
+      String(activeRecord.moduleType).toLowerCase().includes('krex') ||
+      activeRecord.moduleType === 'cep' ||
+      Boolean(inputVal.trim() && activeRecord.queryParam?.replace(/\D/g, '') === inputVal.trim().replace(/\D/g, '')) ||
+      Boolean(activeRecord.rawResponse)
     )
   );
 
@@ -607,11 +614,13 @@ export const ZyrexSearchModal: React.FC<ZyrexSearchModalProps> = ({
                   activeOptionsData && activeOptionsData.options.length > 0 && onSelectOption ? (
                     <OptionsSelectionCard
                       requestId={activeOptionsData.requestId}
-                      prompt={activeOptionsData.prompt}
+                      promptText={activeOptionsData.prompt}
+                      queryParam={activeOptionsData.queryParam || inputVal}
+                      moduleType={selectedModule.id}
                       options={activeOptionsData.options}
                       selectedOption={activeOptionsData.selectedOption}
                       onSelectOption={onSelectOption}
-                      autoSelectSeconds={25}
+                      autoSelectCountdownSeconds={25}
                     />
                   ) : (
                     <div className="h-full flex flex-col items-center justify-center py-12 text-center space-y-3">
