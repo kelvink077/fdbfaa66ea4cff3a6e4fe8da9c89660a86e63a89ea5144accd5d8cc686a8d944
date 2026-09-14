@@ -46,7 +46,7 @@ if (fs.existsSync(envFilePath)) {
 const PORT = 3000;
 
 const app = express();
-app.set('trust proxy', 1);
+app.set('trust proxy', true);
 const server = http.createServer(app);
 
 // =============================================================
@@ -75,6 +75,95 @@ const TELEGRAM_CHAT_ID_PRO = process.env.TELEGRAM_CHAT_ID_PRO || '@Hgliopk00bot'
 const TARGET_BOT_PRO_ID_NUM = process.env.TARGET_BOT_PRO_ID_NUM || '7565502829';   // ID numérico do bot PRO para leitura das respostas
 const TELEGRAM_CHAT_ID_KREX = process.env.TELEGRAM_CHAT_ID_KREX || process.env.TELEGRAM_CHAT_ID_ZYREX || 'KREX'; // Rota exclusiva Buscas KREX (KREX)
 const TELEGRAM_CHAT_ID_ZYREX = TELEGRAM_CHAT_ID_KREX;
+
+// =============================================================
+// LISTA BRANCA ESTRITA DE BOTS AUTORIZADOS (Proteção Anti-Vazamento)
+// Garante isolamento absoluto: mensagens de grupos, canais ou outros contatos NUNCA são processadas
+// =============================================================
+const authorizedBotIds = new Set<string>([
+  '7565502829', // ID oficial do Bot PRO (@Hgliopk00bot)
+  '7912205816', // ID oficial do Bot KREX / Zyrex
+  TARGET_BOT_PRO_ID_NUM,
+  TELEGRAM_CHAT_ID_OLD.replace(/[^0-9]/g, ''),
+  TELEGRAM_CHAT_ID_KREX.replace(/[^0-9]/g, ''),
+  TELEGRAM_CHAT_ID_PRO.replace(/[^0-9]/g, ''),
+].filter(Boolean));
+
+const authorizedBotUsernames = new Set<string>([
+  'hgliopk00bot',
+  'krex',
+  'zyrexbuscasbot',
+  TELEGRAM_CHAT_ID_PRO.replace('@', '').toLowerCase(),
+  TELEGRAM_CHAT_ID_KREX.replace('@', '').toLowerCase(),
+  TELEGRAM_CHAT_ID_OLD.replace('@', '').toLowerCase(),
+].filter(Boolean));
+
+function registerAuthorizedBot(id?: string | number, username?: string) {
+  if (id) {
+    const s = String(id).replace(/^-100/, '').replace(/^-/, '').trim();
+    if (s) authorizedBotIds.add(s);
+  }
+  if (username) {
+    const u = username.replace('@', '').toLowerCase().trim();
+    if (u) authorizedBotUsernames.add(u);
+  }
+}
+
+function isMessageFromAuthorizedBot(message: any): boolean {
+  if (!message) return false;
+
+  // 1. REJEIÇÃO TOTAL E IMEDIATA: Grupos, canais e supergrupos da conta
+  if (message.isGroup || message.isChannel) {
+    return false;
+  }
+  if (message.isPrivate === false) {
+    return false;
+  }
+  if (message.peerId) {
+    const pType = message.peerId.className || message.peerId.constructor?.name || '';
+    if (pType === 'PeerChannel' || pType === 'PeerChat') {
+      return false;
+    }
+  }
+
+  // 2. Extrai identificadores do remetente
+  const senderId = message.senderId ? String(message.senderId) : (message.fromId?.userId ? String(message.fromId.userId) : '');
+  const peerUserId = message.peerId?.userId ? String(message.peerId.userId) : '';
+  const chatId = message.chatId ? String(message.chatId) : '';
+  const cleanSenderId = senderId.replace(/^-100/, '').replace(/^-/, '');
+  const cleanPeerUserId = peerUserId.replace(/^-100/, '').replace(/^-/, '');
+  const cleanChatId = chatId.replace(/^-100/, '').replace(/^-/, '');
+
+  // 3. Verifica IDs numéricos
+  const ids = [cleanSenderId, cleanPeerUserId, cleanChatId, senderId, peerUserId, chatId].filter(Boolean);
+  for (const id of ids) {
+    if (authorizedBotIds.has(id)) return true;
+  }
+
+  // 4. Verifica usernames conhecidos
+  const senderUsername = (message.sender?.username || message.chat?.username || '').toLowerCase().replace('@', '');
+  if (senderUsername && authorizedBotUsernames.has(senderUsername)) {
+    return true;
+  }
+
+  // 5. Verifica correspondência com os bots Pro, Krex e Old configurados
+  const isPro = [TARGET_BOT_PRO_ID_NUM, 'hgliopk00bot', '7565502829'].some((p) =>
+    ids.some((id) => id.includes(p)) || (senderUsername && senderUsername.includes(p))
+  );
+  if (isPro) return true;
+
+  const isZyrex = ['krex', 'zyrexbuscasbot', '7912205816'].some((z) =>
+    ids.some((id) => id.includes(z)) || (senderUsername && senderUsername.includes(z))
+  );
+  if (isZyrex) return true;
+
+  const oldBotClean = TELEGRAM_CHAT_ID_OLD.replace('@', '').toLowerCase();
+  if (oldBotClean && (ids.some((id) => id.toLowerCase().includes(oldBotClean)) || (senderUsername && senderUsername.includes(oldBotClean)))) {
+    return true;
+  }
+
+  return false;
+}
 
 // =============================================================
 // Regras de CORS Seguras
@@ -548,6 +637,7 @@ async function resolveTelegramPeer(client: TelegramClient, targetId: any) {
       if (res && res.users && res.users.length > 0) {
         const u = res.users[0];
         console.log(`[GramJS] @Hgliopk00bot resolvido via RPC nos servidores do Telegram. User ID: ${u.id}`);
+        registerAuthorizedBot(u.id, u.username);
         cachedProBotPeer = new Api.InputPeerUser({
           userId: u.id,
           accessHash: u.accessHash,
@@ -560,8 +650,9 @@ async function resolveTelegramPeer(client: TelegramClient, targetId: any) {
 
     // 2. Tenta obter do cache de entidades do GramJS
     try {
-      const entity = await client.getEntity('@Hgliopk00bot');
+      const entity: any = await client.getEntity('@Hgliopk00bot');
       if (entity) {
+        registerAuthorizedBot(entity.id, entity.username);
         cachedProBotPeer = entity;
         return entity;
       }
@@ -573,6 +664,7 @@ async function resolveTelegramPeer(client: TelegramClient, targetId: any) {
       for (const d of dialogs) {
         const entity: any = d.entity;
         if (entity && (String(entity.id) === TARGET_BOT_PRO_ID_NUM || entity.username?.toLowerCase() === 'hgliopk00bot')) {
+          registerAuthorizedBot(entity.id, entity.username);
           cachedProBotPeer = d.inputEntity || entity;
           return cachedProBotPeer;
         }
@@ -612,6 +704,7 @@ async function resolveTelegramPeer(client: TelegramClient, targetId: any) {
         if (res && res.users && res.users.length > 0) {
           const u = res.users[0];
           console.log(`[GramJS] ${cand} resolvido via RPC nos servidores do Telegram. User ID: ${u.id}`);
+          registerAuthorizedBot(u.id, u.username);
           cachedZyrexBotPeer = new Api.InputPeerUser({
             userId: u.id,
             accessHash: u.accessHash,
@@ -624,8 +717,9 @@ async function resolveTelegramPeer(client: TelegramClient, targetId: any) {
     }
     for (const cand of ['KREX', '@KREX', '@ZyrexBuscasBot']) {
       try {
-        const entity = await client.getEntity(cand);
+        const entity: any = await client.getEntity(cand);
         if (entity) {
+          registerAuthorizedBot(entity.id, entity.username);
           cachedZyrexBotPeer = entity;
           return entity;
         }
@@ -636,6 +730,7 @@ async function resolveTelegramPeer(client: TelegramClient, targetId: any) {
       for (const d of dialogs) {
         const entity: any = d.entity;
         if (entity && (entity.username?.toLowerCase() === 'krex' || entity.username?.toLowerCase() === 'zyrexbuscasbot')) {
+          registerAuthorizedBot(entity.id, entity.username);
           cachedZyrexBotPeer = d.inputEntity || entity;
           return cachedZyrexBotPeer;
         }
@@ -649,10 +744,19 @@ async function resolveTelegramPeer(client: TelegramClient, targetId: any) {
     try {
       const uName = clean.replace('@', '');
       const res: any = await client.invoke(new Api.contacts.ResolveUsername({ username: uName }));
-      if (res && res.users && res.users.length > 0) return res.users[0];
+      if (res && res.users && res.users.length > 0) {
+        registerAuthorizedBot(res.users[0].id, res.users[0].username);
+        return res.users[0];
+      }
       if (res && res.peer) return res.peer;
     } catch {}
-    try { return await client.getEntity(clean); } catch {}
+    try {
+      const entity: any = await client.getEntity(clean);
+      if (entity) {
+        registerAuthorizedBot(entity.id, entity.username);
+        return entity;
+      }
+    } catch {}
   }
 
   if (/^-?\d+$/.test(clean)) {
@@ -664,6 +768,7 @@ async function resolveTelegramPeer(client: TelegramClient, targetId: any) {
       for (const d of dialogs) {
         const entity: any = d.entity;
         if (entity && (String(entity.id) === clean || String(entity.userId) === clean)) {
+          registerAuthorizedBot(entity.id, entity.username);
           return d.inputEntity || entity;
         }
       }
@@ -1175,13 +1280,13 @@ async function executeOptionSelection(
       console.log(`[GramJS] 🚀 Botão "${optionText}" clicado no Telegram para msgId ${menuMsg.id}!`);
     }
 
-    // Polling ativo por até 10 segundos verificando se a mensagem foi editada ou se o resultado chegou
+    // Polling ativo por até 22 segundos verificando se a mensagem foi editada ou se o resultado chegou
     try {
       const chatPeer = menuMsg.peerId || menuMsg.chatId || menuMsg.senderId;
       const inputPeer = await resolveTelegramPeer(userbotClient, chatPeer || targetChat);
 
-      for (let attempt = 0; attempt < 10; attempt++) {
-        await new Promise((r) => setTimeout(r, 800));
+      for (let attempt = 0; attempt < 22; attempt++) {
+        await new Promise((r) => setTimeout(r, 1000));
 
         if ((q.status as string) === 'completed' || !activeQueries.has(requestId)) {
           console.log(`[GramJS] ✅ Consulta ${requestId} concluída com sucesso após seleção de "${optionText}"!`);
@@ -1189,7 +1294,7 @@ async function executeOptionSelection(
         }
 
         try {
-          const recentMsgs = await userbotClient.getMessages(inputPeer, { limit: 5 });
+          const recentMsgs = await userbotClient.getMessages(inputPeer, { limit: 6 });
           for (const rm of recentMsgs) {
             const rmText = (rm.message || rm.text || '').trim();
             const rmButtons = extractAllInlineButtons(rm);
@@ -1205,10 +1310,20 @@ async function executeOptionSelection(
             if (rm.id !== menuMsg.id && rmText && !isInteractiveSelectionMenu(rmText, rmButtons) && !isTransientProgressMessage(rmText)) {
               const cleanTarget = (q.cleanedTarget || q.queryParam.replace(/\D/g, '')).toLowerCase();
               if (
-                cleanTarget && cleanTarget.length >= 3 && rmText.toLowerCase().includes(cleanTarget) ||
-                /dados\s+b[aá]sicos|cpf\s*:|nome\s*:|ve[íi]culo|chassi|renavam/i.test(rmText)
+                (cleanTarget && cleanTarget.length >= 3 && rmText.toLowerCase().includes(cleanTarget)) ||
+                isRecognizedBotDossierContent(rmText)
               ) {
                 console.log(`[GramJS] 📨 Nova mensagem com resultado detectada após seleção de "${optionText}"!`);
+                await handleUserbotIncomingMessage({ message: rm });
+                return { ok: true };
+              }
+            }
+
+            // 3. Documento TXT chegou após a seleção
+            if ((rm.media as any)?.document) {
+              const doc = await extractTxtDocument(userbotClient, rm);
+              if (doc) {
+                console.log(`[GramJS] 📄 Documento TXT detectado após seleção de "${optionText}"!`);
                 await handleUserbotIncomingMessage({ message: rm });
                 return { ok: true };
               }
@@ -1247,15 +1362,54 @@ function isBotInternalErrorMessage(text: string): boolean {
   );
 }
 
+// Reconhece se o texto recebido é um dossiê oficial ou resposta legítima do robô de consultas
+function isRecognizedBotDossierContent(text: string): boolean {
+  if (!text) return false;
+  const t = text.trim();
+  return (
+    /consulta\s+\w+\s+realizada/i.test(t) ||
+    /status:\s*dados\s+completos/i.test(t) ||
+    /selecione\s+uma\s+op[çc][ãa]o/i.test(t) ||
+    /baixar\s+txt/i.test(t) ||
+    /dados\s+do\s+alvo/i.test(t) ||
+    /dados\s+do\s+ve[íi]culo/i.test(t) ||
+    /resultados?:/i.test(t) ||
+    /logradouro\s*:/i.test(t) ||
+    /bairro\s*:/i.test(t) ||
+    /munic[íi]pio\s*:/i.test(t) ||
+    /cidade\/uf\s*:/i.test(t) ||
+    /cep\s*:\s*\d+/i.test(t) ||
+    /cpf\s*:\s*\d+/i.test(t) ||
+    /rg\s*:\s*\d+/i.test(t) ||
+    /nome\s*:\s*[a-zA-Z]/i.test(t) ||
+    /nasc\w*\s*:\s*\d+/i.test(t) ||
+    /m[ãa]e\s*:\s*[a-zA-Z]/i.test(t) ||
+    /chassi\s*:/i.test(t) ||
+    /renavam\s*:/i.test(t) ||
+    /marca\s*[\/:]/i.test(t) ||
+    /modelo\s*:/i.test(t) ||
+    /ve[íi]culo\s*:/i.test(t) ||
+    /ano\s*(?:fab|modelo)?\s*:/i.test(t) ||
+    /propriet[áa]rio\s*:/i.test(t) ||
+    /combust[íi]vel\s*:/i.test(t) ||
+    /placa\s*:\s*[a-zA-Z0-9]/i.test(t) ||
+    /cor\s*:\s*[a-zA-Z]/i.test(t) ||
+    /motor\s*:/i.test(t) ||
+    /n[ãa]o\s+encontrado/i.test(t) ||
+    /nao\s+encontrado/i.test(t) ||
+    /nada\s+consta/i.test(t) ||
+    /nenhum\s+registro/i.test(t) ||
+    /dados\s+b[aá]sicos/i.test(t) ||
+    /dados\s+pessoais/i.test(t) ||
+    /score\s*:/i.test(t) ||
+    /renda\s*:/i.test(t) ||
+    /poder\s+aquisitivo/i.test(t) ||
+    /parentes/i.test(t) ||
+    /telefones?\s*\(?\d*\)?\s*:/i.test(t)
+  );
+}
+
 // Função robusta para detectar mensagens temporárias/transitórias de progresso enviadas por bots do Telegram
-// Exemplos reais tratados:
-// "🔍 Consultando..."
-// "🔎 Consultando..."
-// "📍 CONSULTANDO ENDEREÇO - gencia_web\n\n⏳ Processando..."
-// "⏳ Consultando Nome..."
-// "⏳ Consultando CPF..."
-// "⏳ Processando..."
-// "Aguarde um momento..."
 function isTransientProgressMessage(text: string): boolean {
   if (!text) return false;
   const trimmed = text.trim();
@@ -1273,7 +1427,6 @@ function isTransientProgressMessage(text: string): boolean {
   }
 
   // Padrões diretos de status de carregamento:
-  // "🔍 Consultando...", "🔎 Consultando...", "Consultando...", "⏳ Processando..."
   if (
     /^(?:[🔍🔎⏳⌛📍⚡\s]*)(?:consultando|processando|buscando|pesquisando|aguarde|gerando)(?:\s+\w+|\.{1,3}|\b)/iu.test(trimmed) ||
     trimmed === '🔍 Consultando...' ||
@@ -1298,40 +1451,8 @@ function isTransientProgressMessage(text: string): boolean {
     trimmed.includes('🔍') ||
     trimmed.includes('🔎');
 
-  // 2. Indicadores de que a resposta REAL/FINAL já chegou (com botões, dossiê ou dados reais cadastrais/veiculares)
-  const isFinalResponse = 
-    /consulta\s+\w+\s+realizada/i.test(trimmed) ||
-    /status:\s*dados\s+completos/i.test(trimmed) ||
-    /selecione\s+uma\s+op[çc][ãa]o/i.test(trimmed) ||
-    /baixar\s+txt/i.test(trimmed) ||
-    /dados\s+do\s+alvo/i.test(trimmed) ||
-    /dados\s+do\s+ve[íi]culo/i.test(trimmed) ||
-    /resultados?:/i.test(trimmed) ||
-    /logradouro\s*:/i.test(trimmed) ||
-    /bairro\s*:/i.test(trimmed) ||
-    /munic[íi]pio\s*:/i.test(trimmed) ||
-    /cidade\/uf\s*:/i.test(trimmed) ||
-    /cep\s*:\s*\d+/i.test(trimmed) ||
-    /cpf\s*:\s*\d+/i.test(trimmed) ||
-    /rg\s*:\s*\d+/i.test(trimmed) ||
-    /nome\s*:\s*[a-zA-Z]/i.test(trimmed) ||
-    /nasc\w*\s*:\s*\d+/i.test(trimmed) ||
-    /m[ãa]e\s*:\s*[a-zA-Z]/i.test(trimmed) ||
-    /chassi\s*:/i.test(trimmed) ||
-    /renavam\s*:/i.test(trimmed) ||
-    /marca\s*[\/:]/i.test(trimmed) ||
-    /modelo\s*:/i.test(trimmed) ||
-    /ve[íi]culo\s*:/i.test(trimmed) ||
-    /ano\s*(?:fab|modelo)?\s*:/i.test(trimmed) ||
-    /propriet[áa]rio\s*:/i.test(trimmed) ||
-    /combust[íi]vel\s*:/i.test(trimmed) ||
-    /placa\s*:\s*[a-zA-Z0-9]/i.test(trimmed) ||
-    /cor\s*:\s*[a-zA-Z]/i.test(trimmed) ||
-    /motor\s*:/i.test(trimmed) ||
-    /n[ãa]o\s+encontrado/i.test(trimmed) ||
-    /nao\s+encontrado/i.test(trimmed) ||
-    /nada\s+consta/i.test(trimmed) ||
-    /nenhum\s+registro/i.test(trimmed);
+  // 2. Indicadores de que a resposta REAL/FINAL já chegou
+  const isFinalResponse = isRecognizedBotDossierContent(trimmed);
 
   // Se tem indicador de intermediário e NÃO é resposta final: É TRANSITÓRIA!
   if (hasIntermediateIndicator && !isFinalResponse) {
@@ -1339,7 +1460,6 @@ function isTransientProgressMessage(text: string): boolean {
   }
 
   // Mensagens curtas com ícones ou verbos de carregamento
-  // O flag /u é estritamente obrigatório para não casar com outros emojis através de surrogate pairs!
   if (trimmed.length < 90 && !isFinalResponse) {
     if (/^[📍⏳⌛🔎🔍]/u.test(trimmed)) return true;
     if (/^(consultando|processando|buscando|pesquisando|aguarde)/i.test(trimmed)) return true;
@@ -1352,6 +1472,13 @@ async function handleUserbotIncomingMessage(event: any) {
   try {
     const message = event.message;
     if (!message || message.out) return;
+
+    // 0. VERIFICAÇÃO RIGOROSA ANTI-VAZAMENTO DE DADOS (CRÍTICO)
+    // Se a mensagem não veio de um bot autorizado em chat privado, descarta IMEDIATAMENTE!
+    // NUNCA processar grupos, canais, megagrupos ou conversas particulares com terceiros.
+    if (!isMessageFromAuthorizedBot(message)) {
+      return;
+    }
 
     let incomingText = (message.message || message.text || '').trim();
     const replyToMsgId = message.replyTo?.replyToMsgId || message.replyToMsgId;
@@ -1372,9 +1499,8 @@ async function handleUserbotIncomingMessage(event: any) {
       senderId.toLowerCase().includes(id) || chatId.toLowerCase().includes(id) || peerUserId.toLowerCase().includes(id)
     );
 
-    // Se temos consultas aguardando retorno de bot
-    const hasActive = activeQueries.size > 0;
-    if (!isFromOldBot && !isFromProBot && !isFromZyrexBot && !hasActive) {
+    // Se não temos nenhuma consulta ativa nem histórico recente, descarta
+    if (activeQueries.size === 0 && queryHistory.length === 0) {
       return; 
     }
 
@@ -1408,17 +1534,31 @@ async function handleUserbotIncomingMessage(event: any) {
     // 3. Associação precisa da consulta (targetRequestId)
     let targetRequestId: string | null = null;
 
+    // 3.1: Resposta direta a uma mensagem enviada
     if (replyToMsgId && queryByTelegramMsgId.has(replyToMsgId)) {
       targetRequestId = queryByTelegramMsgId.get(replyToMsgId)!;
     }
 
     if (!targetRequestId && replyToMsgId) {
       for (const [reqId, q] of activeQueries.entries()) {
-        if (q.telegramMessageId === replyToMsgId) { targetRequestId = reqId; break; }
+        if (q.telegramMessageId === replyToMsgId || (q as any).menuMessageId === replyToMsgId) {
+          targetRequestId = reqId;
+          break;
+        }
       }
     }
 
-    // Busca pelo alvo no texto recebido, no TXT ou no arquivo/legenda da foto
+    // 3.2: Edição de mensagem de menu interativo (ex: seleção DEVIL / CREDILINK) ou status intermediário
+    if (!targetRequestId) {
+      for (const [reqId, q] of activeQueries.entries()) {
+        if ((q as any).menuMessageId === messageId || (q as any).intermediateMessageId === messageId) {
+          targetRequestId = reqId;
+          break;
+        }
+      }
+    }
+
+    // 3.3: Busca pelo alvo (CPF, placa, nome, etc.) no texto recebido, no TXT ou na foto
     if (!targetRequestId && (incomingText || attachedTxtContent || attachedPhoto)) {
       const fullSearchCorpus = `${incomingText} ${attachedTxtContent || ''} ${attachedPhoto?.fileName || ''} ${attachedPhoto?.caption || ''}`.toLowerCase();
       for (const [reqId, q] of activeQueries.entries()) {
@@ -1442,80 +1582,83 @@ async function handleUserbotIncomingMessage(event: any) {
       }
     }
 
-    // Se a mensagem for "❌ Não encontrado." ou resposta sem o identificador explícito:
-    // Vincula à consulta pendente mais recente!
+    // 3.4: Se ainda não encontrou, APENAS vincula se a mensagem for comprovadamente do bot
+    // (Menu de seleção interativa, Erro interno do bot, Mensagem transitória ou Dossiê reconhecido com alvo compatível)
     if (!targetRequestId && activeQueries.size > 0) {
-      const reversedEntries = Array.from(activeQueries.entries()).reverse();
-      
-      // 1º Tenta priorizar pelo bot correspondente
-      for (const [reqId, q] of reversedEntries) {
-        const isZyrexQuery = Boolean(q.isZyrex || (q as any).isKrex || q.moduleType === 'cep' || String(q.moduleType).toLowerCase().startsWith('zyrex') || String(q.moduleType).toLowerCase().startsWith('krex'));
-        if (isZyrexQuery && isFromZyrexBot) {
-          targetRequestId = reqId;
-          break;
-        }
-        const isProQuery = !isZyrexQuery && Boolean(q.isPro || String(q.moduleType).toLowerCase().startsWith('pro'));
-        if (isProQuery && isFromProBot) {
-          targetRequestId = reqId;
-          break;
-        }
-        if (!isProQuery && !isZyrexQuery && isFromOldBot) {
-          targetRequestId = reqId;
-          break;
-        }
-      }
+      const inlineButtons = extractAllInlineButtons(message);
+      const isSelection = isInteractiveSelectionMenu(incomingText, inlineButtons);
+      const isTransient = isTransientProgressMessage(incomingText);
+      const isBotErr = isBotInternalErrorMessage(incomingText);
+      const isDossier = isRecognizedBotDossierContent(incomingText) || Boolean(attachedTxtContent) || Boolean(attachedPhoto);
 
-      // 2º Se ainda não encontrou (ex: busca comum respondida pelo bot pro ou vice-versa):
-      // Pega a consulta ativa mais recente
-      if (!targetRequestId) {
-        targetRequestId = reversedEntries[0][0];
-        console.log(`[GramJS] ⚡ Vinculando resposta ("${incomingText.slice(0, 30)}") à consulta ativa mais recente: ${targetRequestId}`);
+      if (isSelection || isTransient || isBotErr || isDossier) {
+        const reversedEntries = Array.from(activeQueries.entries()).reverse();
+        for (const [reqId, q] of reversedEntries) {
+          const isZyrexQuery = Boolean(q.isZyrex || (q as any).isKrex || q.moduleType === 'cep' || String(q.moduleType).toLowerCase().startsWith('zyrex') || String(q.moduleType).toLowerCase().startsWith('krex'));
+          const isProQuery = !isZyrexQuery && Boolean(q.isPro || String(q.moduleType).toLowerCase().startsWith('pro'));
+
+          if (isZyrexQuery && isFromZyrexBot) {
+            targetRequestId = reqId;
+            break;
+          }
+          if (isProQuery && isFromProBot) {
+            targetRequestId = reqId;
+            break;
+          }
+          if (!isProQuery && !isZyrexQuery && isFromOldBot) {
+            targetRequestId = reqId;
+            break;
+          }
+        }
       }
     }
 
-    // Se ainda não encontrou e recebemos um documento TXT, vincula à consulta ativa ou recém-concluída
+    // Se ainda não encontrou e recebemos um documento TXT, vincula APENAS se houver correspondência com o alvo
     if (!targetRequestId && attachedTxtContent) {
-      // 1. Vincula a alguma consulta ativa
+      // 1. Vincula a alguma consulta ativa que corresponda ao alvo
       for (const [reqId, q] of activeQueries.entries()) {
         const clean = (q.cleanedTarget || q.queryParam.replace(/\D/g, '')).toLowerCase();
         const matches = (clean && clean.length >= 4 && attachedTxtContent.toLowerCase().includes(clean)) ||
           (q.queryParam && q.queryParam.length >= 3 && attachedTxtContent.toLowerCase().includes(q.queryParam.toLowerCase()));
-        if (matches || !((q as any).txtContent)) {
+        if (matches) {
           (q as any).txtContent = attachedTxtContent;
           (q as any).txtFileName = attachedTxtFileName || `dossie-${q.moduleType}-${q.id}.txt`;
           console.log(`[GramJS] ✅ TXT vinculado à consulta ativa ${q.id} (${q.queryParam})`);
-          return;
+          targetRequestId = reqId;
+          break;
         }
       }
 
-      // 2. Vincula ao histórico recente
-      for (const hist of queryHistory.slice(0, 10)) {
-        const clean = (hist.cleanedTarget || hist.queryParam.replace(/\D/g, '')).toLowerCase();
-        const matchesTarget = (clean && clean.length >= 4 && attachedTxtContent.toLowerCase().includes(clean)) ||
-          (hist.queryParam && hist.queryParam.length >= 3 && attachedTxtContent.toLowerCase().includes(hist.queryParam.toLowerCase()));
-        const isRecent = (Date.now() - hist.timestamp) < 180000;
+      // 2. Vincula ao histórico recente APENAS se corresponder ao alvo
+      if (!targetRequestId) {
+        for (const hist of queryHistory.slice(0, 10)) {
+          const clean = (hist.cleanedTarget || hist.queryParam.replace(/\D/g, '')).toLowerCase();
+          const matchesTarget = (clean && clean.length >= 4 && attachedTxtContent.toLowerCase().includes(clean)) ||
+            (hist.queryParam && hist.queryParam.length >= 3 && attachedTxtContent.toLowerCase().includes(hist.queryParam.toLowerCase()));
+          const isRecent = (Date.now() - hist.timestamp) < 180000;
 
-        if (matchesTarget || (!hist.txtContent && isRecent)) {
-          hist.txtContent = attachedTxtContent;
-          hist.txtFileName = attachedTxtFileName || `dossie-${hist.moduleType}-${hist.id}.txt`;
-          if (!hist.rawResponse || hist.rawResponse.length < 200 || /consulta\s+\w+\s+realizada/i.test(hist.rawResponse)) {
-            hist.rawResponse = attachedTxtContent;
+          if (matchesTarget && isRecent) {
+            hist.txtContent = attachedTxtContent;
+            hist.txtFileName = attachedTxtFileName || `dossie-${hist.moduleType}-${hist.id}.txt`;
+            if (!hist.rawResponse || hist.rawResponse.length < 200 || /consulta\s+\w+\s+realizada/i.test(hist.rawResponse)) {
+              hist.rawResponse = attachedTxtContent;
+            }
+            io.to(hist.socketId).emit('query:txt_available', {
+              id: hist.id,
+              txtContent: attachedTxtContent,
+              txtFileName: hist.txtFileName,
+              rawResponse: hist.rawResponse,
+            });
+            io.to(hist.socketId).emit('query:response', { ...hist });
+            io.emit('query:completed_broadcast', { ...hist });
+            console.log(`[GramJS] ✅ TXT retroativo vinculado e dossiê atualizado com sucesso à consulta ${hist.id} (${hist.queryParam})`);
+            return;
           }
-          io.to(hist.socketId).emit('query:txt_available', {
-            id: hist.id,
-            txtContent: attachedTxtContent,
-            txtFileName: hist.txtFileName,
-            rawResponse: hist.rawResponse,
-          });
-          io.to(hist.socketId).emit('query:response', { ...hist });
-          io.emit('query:completed_broadcast', { ...hist });
-          console.log(`[GramJS] ✅ TXT retroativo vinculado e dossiê atualizado com sucesso à consulta ${hist.id} (${hist.queryParam})`);
-          return;
         }
       }
     }
 
-    // Se ainda não encontrou e recebemos uma FOTO, vincula à consulta ativa ou ao histórico recente
+    // Se ainda não encontrou e recebemos uma FOTO, vincula APENAS se houver correspondência com o alvo
     if (!targetRequestId && attachedPhoto) {
       // 1. Vincula a alguma consulta ativa
       for (const [reqId, q] of activeQueries.entries()) {
@@ -1524,7 +1667,7 @@ async function handleUserbotIncomingMessage(event: any) {
           (q.queryParam && q.queryParam.length >= 3 && attachedPhoto.fileName.toLowerCase().includes(q.queryParam.toLowerCase())) ||
           q.moduleType === 'pro_foto' ||
           q.telegramCommand?.includes('foto');
-        if (matches || !q.photoUrl) {
+        if (matches) {
           q.photoUrl = attachedPhoto.dataUrl;
           if (!q.photos) q.photos = [];
           q.photos.push({
@@ -1541,7 +1684,7 @@ async function handleUserbotIncomingMessage(event: any) {
         }
       }
 
-      // 2. Vincula ao histórico recente
+      // 2. Vincula ao histórico recente APENAS se corresponder ao alvo
       if (!targetRequestId) {
         for (const hist of queryHistory.slice(0, 10)) {
           const clean = (hist.cleanedTarget || hist.queryParam.replace(/\D/g, '')).toLowerCase();
@@ -1551,7 +1694,7 @@ async function handleUserbotIncomingMessage(event: any) {
             hist.telegramCommand?.includes('foto');
           const isRecent = (Date.now() - hist.timestamp) < 180000;
 
-          if (matchesTarget || (!hist.photoUrl && isRecent && (hist.moduleType === 'pro_foto' || hist.telegramCommand?.includes('foto')))) {
+          if (matchesTarget && isRecent) {
             hist.photoUrl = attachedPhoto.dataUrl;
             if (!hist.photos) hist.photos = [];
             hist.photos.push({
@@ -1575,16 +1718,15 @@ async function handleUserbotIncomingMessage(event: any) {
     }
 
     // Se a consulta ativa não foi encontrada, mas recebemos dados cadastrais ou veiculares do robô,
-    // atualiza o histórico mais recente se estava aguardando ou com mensagem transitória ("🔍 Consultando...")
+    // atualiza o histórico mais recente APENAS se houver correspondência estrita com o alvo
     if (!targetRequestId && incomingText && !isTransientProgressMessage(incomingText)) {
       for (const hist of queryHistory.slice(0, 8)) {
         const clean = (hist.cleanedTarget || hist.queryParam.replace(/\D/g, '')).toLowerCase();
         const matchesTarget = (clean && clean.length >= 4 && incomingText.toLowerCase().includes(clean)) ||
           (hist.queryParam && hist.queryParam.length >= 3 && incomingText.toLowerCase().includes(hist.queryParam.toLowerCase()));
         const isRecent = (Date.now() - hist.timestamp) < 180000;
-        const isStuckTransient = hist.rawResponse === '🔍 Consultando...' || hist.rawResponse === 'Consultando...' || (hist.rawResponse && hist.rawResponse.length < 50 && !hist.rawResponse.includes(':'));
 
-        if (isRecent && (matchesTarget || isStuckTransient)) {
+        if (isRecent && matchesTarget && isRecognizedBotDossierContent(incomingText)) {
           console.log(`[GramJS] 🎯 Atualizando resposta definitiva para a consulta ${hist.id} (${hist.queryParam}): "${incomingText.slice(0, 40)}..."`);
           hist.rawResponse = cleanTelegramRawResponse(incomingText);
           if (isBotInternalErrorMessage(incomingText)) {
@@ -2566,6 +2708,15 @@ function handleIncomingTelegramResponse(requestId: string, rawText: string, meta
     };
   }
 
+  if ((record as any).ttlTimer) {
+    clearTimeout((record as any).ttlTimer);
+    (record as any).ttlTimer = null;
+  }
+  if ((record as any).selectionFallbackTimer) {
+    clearTimeout((record as any).selectionFallbackTimer);
+    (record as any).selectionFallbackTimer = null;
+  }
+
   queryHistory.unshift({ ...record });
   if (queryHistory.length > 200) queryHistory.pop();
   activeQueries.delete(requestId);
@@ -2575,6 +2726,25 @@ function handleIncomingTelegramResponse(requestId: string, rawText: string, meta
   io.emit('query:completed_broadcast', { ...record, meta });
   return record;
 }
+
+// Varredura periódica para expirar e limpar consultas ativas zumbis (TTL de 90s)
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, q] of activeQueries.entries()) {
+    if (now - q.timestamp > 90000) {
+      console.warn(`[activeQueries TTL Sweep] Removendo consulta zumbi expirada após 90s: ${id} (${q.queryParam})`);
+      if ((q as any).ttlTimer) clearTimeout((q as any).ttlTimer);
+      if ((q as any).selectionFallbackTimer) clearTimeout((q as any).selectionFallbackTimer);
+      activeQueries.delete(id);
+      if (q.telegramMessageId) queryByTelegramMsgId.delete(q.telegramMessageId);
+      io.to(q.socketId).emit('query:response', {
+        ...q,
+        status: 'error',
+        errorMessage: 'Tempo limite de resposta do robô Telegram excedido. Por favor tente novamente.',
+      });
+    }
+  }
+}, 20000);
 
 // Endpoint para identificação e auditoria do IP real do cliente
 app.get('/api/my-ip', (req, res) => {
