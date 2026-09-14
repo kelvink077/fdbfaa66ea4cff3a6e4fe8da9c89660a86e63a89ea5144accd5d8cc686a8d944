@@ -86,10 +86,11 @@ const configuredAllowedOrigins = [FRONTEND_URL, ...ALLOWED_ORIGINS_ENV.split(','
   .filter(Boolean);
 
 function isOriginAllowed(origin: string | undefined): boolean {
-  if (!origin) return process.env.NODE_ENV !== 'production';
+  if (!origin) return true;
   const normalizedOrigin = origin.replace(/\/$/, '');
   if (configuredAllowedOrigins.includes(normalizedOrigin)) return true;
   if (/^https:\/\/[a-zA-Z0-9-_.]+\.netlify\.app$/.test(normalizedOrigin)) return true;
+  if (/^https:\/\/[a-zA-Z0-9-_.]+\.onrender\.com$/.test(normalizedOrigin)) return true;
   if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(normalizedOrigin)) return true;
   if (normalizedOrigin.includes('.run.app')) return true;
   if (normalizedOrigin.includes('googleusercontent.com') || normalizedOrigin.includes('google.com')) return true;
@@ -103,7 +104,7 @@ const corsOptions: cors.CorsOptions = {
       callback(null, true);
     } else {
       console.warn(`[CORS] Origem bloqueada: ${origin}`);
-      callback(new Error(`Bloqueado pelo CORS: ${origin}`));
+      callback(null, false);
     }
   },
   credentials: true,
@@ -3683,13 +3684,27 @@ app.get('/api/query/:id', requireAuth, (req, res) => {
   return res.status(404).json({ ok: false, found: false, error: 'Consulta não encontrada' });
 });
 
-app.get('/api/system/status', requireAuth, requireAdmin, (req, res) => {
+app.get('/api/system/status', (req, res) => {
+  const authHeader = req.headers.authorization;
+  let isAdmin = false;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7);
+    const payload = parseJwtPayload(token);
+    if (payload?.email && ADMIN_EMAILS.has(payload.email.toLowerCase())) {
+      isAdmin = true;
+    }
+  }
+
   res.json({
     status: 'ok',
     userbotStatus,
     lastError: lastUserbotError,
     lastUserbotError,
-    userbotProfile,
+    userbotProfile: userbotProfile ? {
+      firstName: userbotProfile.firstName,
+      username: userbotProfile.username,
+      ...(isAdmin ? { phone: userbotProfile.phone, id: userbotProfile.id } : {})
+    } : null,
     targetProBot: TELEGRAM_CHAT_ID_PRO,
     targetKrexBot: TELEGRAM_CHAT_ID_KREX,
     targetZyrexBot: TELEGRAM_CHAT_ID_KREX,
@@ -3700,7 +3715,7 @@ app.get('/api/system/status', requireAuth, requireAdmin, (req, res) => {
     totalActiveQueries: activeQueries.size,
     botUsername: userbotProfile?.username || userbotProfile?.firstName,
     apiIdConfigured: Boolean(TELEGRAM_API_ID),
-    phoneNumber: TELEGRAM_PHONE_NUMBER,
+    phoneNumber: isAdmin ? TELEGRAM_PHONE_NUMBER : undefined,
   });
 });
 

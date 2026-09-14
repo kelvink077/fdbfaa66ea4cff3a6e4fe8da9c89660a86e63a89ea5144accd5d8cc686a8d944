@@ -94,10 +94,31 @@ export const queryLimiter = rateLimit({
 
 /**
  * Geo-IP Limiter: Permite conexões apenas do Brasil (BR) e localhost/desenvolvimento
+ * Seguro para proxies de nuvem (Netlify Edge, Render, Cloudflare, Google Cloud)
  */
 export const geoIpFilter = (req: Request, res: Response, next: NextFunction) => {
   // Ignora chamadas de webhook de pagamento (UP DEPIX) e health check
-  if (req.path.startsWith('/api/payment/webhook') || req.path === '/api/health') {
+  if (
+    req.path.startsWith('/api/payment/webhook') || 
+    req.path === '/api/health' || 
+    req.path === '/api/system/status'
+  ) {
+    return next();
+  }
+
+  // Permitir requisições vindas dos domínios do sistema (Netlify, Render, Cloud Run, localhost)
+  const origin = req.headers.origin || req.headers.referer || '';
+  if (
+    origin.includes('netlify.app') || 
+    origin.includes('onrender.com') || 
+    origin.includes('run.app') ||
+    origin.includes('localhost')
+  ) {
+    return next();
+  }
+
+  // Ativado apenas se explicitamente configurado no ambiente
+  if (process.env.GEOIP_BLOCK_ENABLED !== 'true') {
     return next();
   }
 
@@ -122,9 +143,9 @@ export const geoIpFilter = (req: Request, res: Response, next: NextFunction) => 
 
   try {
     const geo = geoip.lookup(rawIp);
-    // Se localizou e não for Brasil, bloqueia
+    // Se localizou e for país expressamente fora do Brasil
     if (geo && geo.country && geo.country !== 'BR') {
-      console.warn(`[GeoIP Security] Acesso bloqueado de IP internacional: ${rawIp} (${geo.country})`);
+      console.warn(`[GeoIP Security] Acesso de IP internacional detectado: ${rawIp} (${geo.country})`);
       return res.status(403).json({
         ok: false,
         error: 'Acesso restrito ao território nacional (Brasil).',
