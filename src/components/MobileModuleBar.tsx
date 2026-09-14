@@ -8,6 +8,7 @@ import {
   Mail, 
   Car, 
   Phone,
+  MapPin,
   Layers,
   Sparkles
 } from 'lucide-react';
@@ -38,6 +39,7 @@ export const MobileModuleBar: React.FC<MobileModuleBarProps> = ({
       case 'email': return <Mail className={iconClass} />;
       case 'placa': return <Car className={iconClass} />;
       case 'telefone': return <Phone className={iconClass} />;
+      case 'cep': return <MapPin className={iconClass} />;
       default: return <Sparkles className={iconClass} />;
     }
   };
@@ -52,6 +54,7 @@ export const MobileModuleBar: React.FC<MobileModuleBarProps> = ({
       case 'placa': return 'PLACA';
       case 'telefone': return 'TELEFONE';
       case 'email': return 'E-MAIL';
+      case 'cep': return 'CEP';
       default: return id.toUpperCase();
     }
   };

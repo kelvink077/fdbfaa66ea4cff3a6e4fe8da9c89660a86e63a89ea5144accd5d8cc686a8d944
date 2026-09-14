@@ -279,26 +279,14 @@ GRAVAME: QUITADO (SEM RESTRIÇÃO FINANCEIRA)
 SITUAÇÃO ROUBO/FURTO: NADA CONSTA
 DÉBITOS / MULTAS: NENHUM DÉBITO PENDENTE`,
 
-  cep: `📍 [VARREDURA DE MORADORES & LOGRADOURO POR CEP]
+  cep: `📍 [CONSULTA DE CEP NACIONAL]
 =========================================
 CEP CONSULTADO: 01419-002
 LOGRADOURO: Alameda Santos, 1000 a 1400
 BAIRRO: Cerqueira César | CIDADE/UF: São Paulo - SP
-TIPO DE LOGRADOURO: Via Urbana Principal
-POPULAÇÃO ESTIMADA NO RAIO: 4.820 pessoas
-
-👥 MORADORES IDENTIFICADOS NESTE CEP:
-1. CLAUDIO HENRIQUE VIEIRA (Apto 42)
-   - CPF: 312.***.***-09 | Nascimento: 1982
-   - Status: Residente Confirmado (Receita Federal / Concessionária)
-2. MARIANA ALBUQUERQUE LIMA (Apto 71)
-   - CPF: 429.***.***-81 | Nascimento: 1990
-   - Status: Residente Confirmada (Bancário / Concessionária)
-3. ROBERTO CARLOS MENEZES (Apto 114)
-   - CPF: 188.***.***-34 | Nascimento: 1976
-   - Status: Titular do Imóvel (IPTU / Cartório)
-
-💡 DICA: Clique em "VARREDURA CEP" no menu para gerar dossiê profundo individual com até 7 minutos de mineração analítica passo a passo.`,
+CÓDIGO IBGE: 3550308 | DDD: 11
+ZONA: Central / Sul
+SITUAÇÃO: CEP ATIVO / REGULARIZADO (CORREIOS)`,
 
   endereco: `🏠 [CONSULTA DE ENDEREÇO & MORADORES ASSOCIADOS]
 =========================================

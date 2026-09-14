@@ -1,0 +1,12 @@
+# .netlifyignore — Garante que nenhum artefato de backend ou segredo vá para o CDN público da Netlify
+server.cjs
+server.js
+server.cjs.map
+*.map
+.env
+.env.*
+.git
+node_modules
+dist/server.cjs
+dist/server.js
+dist/server.cjs.map

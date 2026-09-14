@@ -252,9 +252,13 @@ export default function App() {
   const handleReconnectTelegram = async () => {
     try {
       setIsReconnectingTelegram(true);
+      const token = currentUserRef.current ? await currentUserRef.current.getIdToken().catch(() => '') : '';
       const res = await fetch('/api/telegram/reconnect', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({}),
       });
       const data = await res.json();
@@ -291,7 +295,10 @@ export default function App() {
     // 1. Imediatamente faz fetch do status inicial para garantir sincronia instantânea
     const fetchSystemStatus = async () => {
       try {
-        const res = await fetch('/api/system/status');
+        const token = currentUserRef.current ? await currentUserRef.current.getIdToken().catch(() => '') : '';
+        const res = await fetch('/api/system/status', {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        });
         if (res.ok) {
           const data = await res.json();
           setTelegramConfig((prev) => ({
@@ -349,6 +356,14 @@ export default function App() {
       transports: ['polling', 'websocket'],
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
+      auth: async (cb: (data: { token?: string }) => void) => {
+        try {
+          const token = currentUserRef.current ? await currentUserRef.current.getIdToken().catch(() => '') : '';
+          cb({ token });
+        } catch {
+          cb({});
+        }
+      },
     });
 
     socketInstance.on('connect', () => {
@@ -682,25 +697,33 @@ export default function App() {
       }
     });
 
-    fetch('/api/history')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.records && Array.isArray(data.records) && data.records.length > 0) {
-          const parsedHistory = data.records.map((r: any) => ({
-            ...r,
-            parsedReport: r.rawResponse ? parseIntelligenceResponse(r.rawResponse, r.moduleType, r.queryParam) : undefined,
-          }));
-          setHistory((prev) => {
-            const existingIds = new Set(prev.map((p) => p.id));
-            const toAdd = parsedHistory.filter((ph: any) => !existingIds.has(ph.id));
-            return [...toAdd, ...prev];
-          });
-          if (!currentActiveRecord && parsedHistory.length > 0) {
-            setCurrentActiveRecord(parsedHistory[0]);
+    const fetchInitialHistory = async () => {
+      try {
+        const token = currentUserRef.current ? await currentUserRef.current.getIdToken().catch(() => '') : '';
+        const res = await fetch('/api/history', {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.records && Array.isArray(data.records) && data.records.length > 0) {
+            const parsedHistory = data.records.map((r: any) => ({
+              ...r,
+              parsedReport: r.rawResponse ? parseIntelligenceResponse(r.rawResponse, r.moduleType, r.queryParam) : undefined,
+            }));
+            setHistory((prev) => {
+              const existingIds = new Set(prev.map((p) => p.id));
+              const toAdd = parsedHistory.filter((ph: any) => !existingIds.has(ph.id));
+              return [...toAdd, ...prev];
+            });
+            if (!currentActiveRecord && parsedHistory.length > 0) {
+              setCurrentActiveRecord(parsedHistory[0]);
+            }
           }
         }
-      })
-      .catch(() => {});
+      } catch {}
+    };
+
+    fetchInitialHistory();
 
     return () => {
       unsubscribeAuth();
@@ -790,11 +813,6 @@ export default function App() {
       return;
     }
 
-    // Se o módulo for CEP, abre também a inteligência de varredura profunda de moradores
-    if (moduleType === 'cep') {
-      handleOpenCepScan(queryParam);
-    }
-
     // ==============================================================
     // 0.1 CHECAGEM DE COOLDOWN (INTERVALO OBRIGATÓRIO DE 15 SEGUNDOS)
     // ==============================================================
@@ -846,9 +864,13 @@ export default function App() {
       // Fallback HTTP instantâneo caso o websocket esteja em processo de reconexão
       try {
         setLoadingStepText('Transmitindo via API HTTP segura...');
+        const token = currentUserRef.current ? await currentUserRef.current.getIdToken().catch(() => '') : '';
         const res = await fetch('/api/query/request', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          },
           body: JSON.stringify({ moduleType, queryParam, isPro, isZyrex, isKrex: isZyrex }),
         });
         const data = await res.json();
@@ -1286,6 +1308,7 @@ export default function App() {
         userProfile={userProfile}
         initialDiscountCode={pixDiscountCode}
         initialDiscountedPrice={pixDiscountedPrice}
+        socket={socket}
         onPaymentSuccess={(updated) => {
           setUserProfile(updated);
         }}

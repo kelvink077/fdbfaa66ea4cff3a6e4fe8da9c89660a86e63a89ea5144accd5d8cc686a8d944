@@ -16,7 +16,6 @@ import {
   FileDown,
   XCircle,
   FileText,
-  Sparkles,
   AlertTriangle,
   RefreshCw,
   RotateCcw,
@@ -135,10 +134,12 @@ export const ZyrexSearchModal: React.FC<ZyrexSearchModalProps> = ({
   };
 
   const handleFillSample = () => {
+    if (selectedModule.suspended) return;
     setInputVal(selectedModule.defaultSample);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (selectedModule.suspended) return;
     const val = e.target.value;
     if (selectedModule.id === 'zyrex_cpf' || selectedModule.id === 'zyrex_score' || selectedModule.id === 'zyrex_renda' || selectedModule.id === 'zyrex_poder_aquis') {
       setInputVal(val.replace(/\D/g, '').slice(0, 11));
@@ -156,6 +157,7 @@ export const ZyrexSearchModal: React.FC<ZyrexSearchModalProps> = ({
   };
 
   const handleTriggerSearch = () => {
+    if (selectedModule.suspended) return;
     if (!inputVal.trim() || isLoading) return;
 
     // Bloqueio mandatário para contas expiradas
@@ -309,19 +311,34 @@ export const ZyrexSearchModal: React.FC<ZyrexSearchModalProps> = ({
               
               {/* Coluna 1 da imagem */}
               <div className="flex flex-col gap-2">
-                {ZYREX_MODULES_COL1.map((mod) => {
+                {ZYREX_MODULES_COL1.filter((mod) => !mod.hidden).map((mod) => {
                   const isSelected = selectedModule.id === mod.id;
+                  const isSuspended = Boolean(mod.suspended || mod.isDevelopment);
                   return (
                     <button
                       key={mod.id}
                       onClick={() => handleSelectModule(mod)}
-                      className={`w-full py-2.5 px-3 rounded-lg text-xs font-semibold tracking-wide transition-all cursor-pointer flex items-center justify-center text-center select-none shadow-sm ${
-                        isSelected
+                      className={`w-full py-2.5 px-3 rounded-lg text-xs font-semibold tracking-wide transition-all cursor-pointer flex flex-col items-center justify-center text-center select-none shadow-sm ${
+                        isSuspended
+                          ? isSelected
+                            ? 'bg-[#261e0c] text-[#ffd166] border-2 border-amber-400 shadow-md shadow-amber-500/20 scale-[1.02]'
+                            : 'bg-[#141a18] hover:bg-[#1c2421] text-[#ffd166] border border-amber-500/50 hover:border-amber-400'
+                          : isSelected
                           ? 'bg-gradient-to-r from-[#00d2ff] to-[#00827c] text-[#011d1c] font-bold shadow-md shadow-[#00d2ff]/20 border border-[#79fbf5] scale-[1.02]'
                           : 'bg-[#0a2328] hover:bg-[#0e3037] text-[#edfffe] border border-[#003734] hover:border-[#00827c]/60'
                       }`}
                     >
-                      <span>{mod.title}</span>
+                      <div className="flex items-center gap-1.5 justify-center">
+                        <span>{mod.title}</span>
+                        {isSuspended && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                        )}
+                      </div>
+                      {isSuspended && (
+                        <span className="text-[8.5px] font-mono uppercase tracking-wider text-amber-300 font-bold bg-amber-950/70 px-1.5 py-0.5 rounded border border-amber-500/40 mt-1">
+                          Em desenvolvimento
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -329,19 +346,34 @@ export const ZyrexSearchModal: React.FC<ZyrexSearchModalProps> = ({
 
               {/* Coluna 2 da imagem */}
               <div className="flex flex-col gap-2">
-                {ZYREX_MODULES_COL2.map((mod) => {
+                {ZYREX_MODULES_COL2.filter((mod) => !mod.hidden).map((mod) => {
                   const isSelected = selectedModule.id === mod.id;
+                  const isSuspended = Boolean(mod.suspended || mod.isDevelopment);
                   return (
                     <button
                       key={mod.id}
                       onClick={() => handleSelectModule(mod)}
-                      className={`w-full py-2.5 px-3 rounded-lg text-xs font-semibold tracking-wide transition-all cursor-pointer flex items-center justify-center text-center select-none shadow-sm ${
-                        isSelected
+                      className={`w-full py-2.5 px-3 rounded-lg text-xs font-semibold tracking-wide transition-all cursor-pointer flex flex-col items-center justify-center text-center select-none shadow-sm ${
+                        isSuspended
+                          ? isSelected
+                            ? 'bg-[#261e0c] text-[#ffd166] border-2 border-amber-400 shadow-md shadow-amber-500/20 scale-[1.02]'
+                            : 'bg-[#141a18] hover:bg-[#1c2421] text-[#ffd166] border border-amber-500/50 hover:border-amber-400'
+                          : isSelected
                           ? 'bg-gradient-to-r from-[#00d2ff] to-[#00827c] text-[#011d1c] font-bold shadow-md shadow-[#00d2ff]/20 border border-[#79fbf5] scale-[1.02]'
                           : 'bg-[#0a2328] hover:bg-[#0e3037] text-[#edfffe] border border-[#003734] hover:border-[#00827c]/60'
                       }`}
                     >
-                      <span>{mod.title}</span>
+                      <div className="flex items-center gap-1.5 justify-center">
+                        <span>{mod.title}</span>
+                        {isSuspended && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                        )}
+                      </div>
+                      {isSuspended && (
+                        <span className="text-[8.5px] font-mono uppercase tracking-wider text-amber-300 font-bold bg-amber-950/70 px-1.5 py-0.5 rounded border border-amber-500/40 mt-1">
+                          Em desenvolvimento
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -349,19 +381,38 @@ export const ZyrexSearchModal: React.FC<ZyrexSearchModalProps> = ({
             </div>
 
             {/* Selected Module Info Card */}
-            <div className="bg-[#002b33]/60 border border-[#00d2ff]/30 p-3.5 rounded-xl flex items-center justify-between gap-3">
+            <div className={`p-3.5 rounded-xl flex items-center justify-between gap-3 ${
+              selectedModule.suspended
+                ? 'bg-amber-950/30 border border-amber-500/40'
+                : 'bg-[#002b33]/60 border border-[#00d2ff]/30'
+            }`}>
               <div>
-                <span className="text-[10px] font-mono uppercase text-[#79fbf5] block">Módulo Selecionado</span>
+                <span className={`text-[10px] font-mono uppercase block ${
+                  selectedModule.suspended ? 'text-amber-400 font-bold flex items-center gap-1' : 'text-[#79fbf5]'
+                }`}>
+                  {selectedModule.suspended ? (
+                    <>
+                      <AlertTriangle className="w-3 h-3 text-amber-400" />
+                      Módulo Suspenso (Em desenvolvimento)
+                    </>
+                  ) : (
+                    'Módulo Selecionado'
+                  )}
+                </span>
                 <span className="text-sm font-bold text-[#ffffff]">{selectedModule.title} ({selectedModule.command})</span>
-                <p className="text-[11px] text-[#9bb0af] mt-0.5">{selectedModule.inputHelper}</p>
+                <p className={`text-[11px] mt-0.5 ${selectedModule.suspended ? 'text-amber-200' : 'text-[#9bb0af]'}`}>
+                  {selectedModule.inputHelper}
+                </p>
               </div>
-              <button
-                onClick={handleFillSample}
-                className="px-2.5 py-1.5 rounded bg-[#011d1c] hover:bg-[#003734] border border-[#00827c]/50 text-[#79fbf5] text-[11px] font-mono transition-colors cursor-pointer whitespace-nowrap"
-                title="Inserir dado de teste rápido"
-              >
-                Inserir Exemplo
-              </button>
+              {!selectedModule.suspended && (
+                <button
+                  onClick={handleFillSample}
+                  className="px-2.5 py-1.5 rounded bg-[#011d1c] hover:bg-[#003734] border border-[#00827c]/50 text-[#79fbf5] text-[11px] font-mono transition-colors cursor-pointer whitespace-nowrap"
+                  title="Inserir dado de teste rápido"
+                >
+                  Inserir Exemplo
+                </button>
+              )}
             </div>
           </div>
 
@@ -379,6 +430,26 @@ export const ZyrexSearchModal: React.FC<ZyrexSearchModalProps> = ({
                   Rota: <strong className="text-[#00d2ff]">KREX</strong>
                 </span>
               </div>
+
+              {/* Banner Informativo se o módulo estiver suspenso / em desenvolvimento */}
+              {selectedModule.suspended && (
+                <div className="p-3.5 rounded-lg bg-amber-950/40 border border-amber-500/50 text-amber-200 flex items-start sm:items-center justify-between gap-3 shadow-md animate-in fade-in duration-200">
+                  <div className="flex items-center gap-2.5 text-xs">
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                    <div>
+                      <span className="font-bold text-amber-300 block text-xs">
+                        Módulo {selectedModule.title} Suspenso
+                      </span>
+                      <span className="text-amber-100/85 text-[11px] font-mono">
+                        Este módulo encontra-se em desenvolvimento e temporariamente suspenso para manutenção das bases.
+                      </span>
+                    </div>
+                  </div>
+                  <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold uppercase whitespace-nowrap border border-amber-500/40">
+                    Em desenvolvimento
+                  </span>
+                </div>
+              )}
 
               {/* Banner Informativo de Cooldown (15s Obrigatórios) */}
               {cooldownSeconds > 0 && (
@@ -403,18 +474,37 @@ export const ZyrexSearchModal: React.FC<ZyrexSearchModalProps> = ({
                     value={inputVal}
                     onChange={handleInputChange}
                     onKeyDown={(e) => e.key === 'Enter' && handleTriggerSearch()}
-                    placeholder={selectedModule.placeholder}
-                    disabled={isLoading}
-                    className="w-full pl-10 pr-4 py-3 bg-[#02181b] border border-[#003734] focus:border-[#00d2ff] rounded-lg text-sm text-[#ffffff] font-mono placeholder:text-[#456365] focus:outline-none focus:ring-1 focus:ring-[#00d2ff] transition-all"
+                    placeholder={selectedModule.suspended ? 'Módulo temporariamente suspenso (Em desenvolvimento)' : selectedModule.placeholder}
+                    disabled={isLoading || Boolean(selectedModule.suspended)}
+                    className={`w-full pl-10 pr-4 py-3 bg-[#02181b] border rounded-lg text-sm font-mono transition-all ${
+                      selectedModule.suspended
+                        ? 'border-amber-500/40 text-amber-300/60 placeholder:text-amber-500/40 cursor-not-allowed bg-[#0b1315]'
+                        : 'border-[#003734] focus:border-[#00d2ff] text-[#ffffff] placeholder:text-[#456365] focus:outline-none focus:ring-1 focus:ring-[#00d2ff]'
+                    }`}
                   />
                 </div>
                 <button
                   onClick={handleTriggerSearch}
-                  disabled={isLoading || !inputVal.trim() || cooldownSeconds > 0}
-                  title={cooldownSeconds > 0 ? `Aguarde ${cooldownSeconds}s para nova consulta.` : undefined}
-                  className="px-6 py-3 bg-gradient-to-r from-[#00d2ff] via-[#00827c] to-[#00d2ff] hover:opacity-95 text-[#011d1c] font-extrabold font-mono text-xs uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-[#00d2ff]/20 disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.02]"
+                  disabled={isLoading || !inputVal.trim() || cooldownSeconds > 0 || Boolean(selectedModule.suspended)}
+                  title={
+                    selectedModule.suspended
+                      ? 'Módulo temporariamente suspenso em desenvolvimento'
+                      : cooldownSeconds > 0
+                      ? `Aguarde ${cooldownSeconds}s para nova consulta.`
+                      : undefined
+                  }
+                  className={`px-6 py-3 font-extrabold font-mono text-xs uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 transition-all shadow-lg ${
+                    selectedModule.suspended
+                      ? 'bg-amber-950/60 border border-amber-500/50 text-amber-300/80 cursor-not-allowed shadow-none'
+                      : 'bg-gradient-to-r from-[#00d2ff] via-[#00827c] to-[#00d2ff] hover:opacity-95 text-[#011d1c] cursor-pointer shadow-[#00d2ff]/20 disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.02]'
+                  }`}
                 >
-                  {isLoading ? (
+                  {selectedModule.suspended ? (
+                    <>
+                      <AlertTriangle className="w-4 h-4 text-amber-400" />
+                      <span>Em Desenvolvimento</span>
+                    </>
+                  ) : isLoading ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin text-[#011d1c]" />
                       <span>Processando...</span>
@@ -614,13 +704,17 @@ export const ZyrexSearchModal: React.FC<ZyrexSearchModalProps> = ({
                       </div>
                     </div>
                   ) : activeTab === 'raw' ? (
-                    <pre className="text-[#cbfffc] whitespace-pre-wrap leading-relaxed font-mono">
-                      {activeRecord.rawResponse}
-                    </pre>
+                    <div className="space-y-3">
+                      <pre className="text-[#cbfffc] whitespace-pre-wrap leading-relaxed font-mono">
+                        {activeRecord.rawResponse}
+                      </pre>
+                    </div>
                   ) : activeTab === 'txt' && activeRecord.txtContent ? (
-                    <pre className="text-[#a4e5e0] whitespace-pre-wrap leading-relaxed font-mono bg-[#02181b] p-3 rounded border border-[#003734]">
-                      {activeRecord.txtContent}
-                    </pre>
+                    <div className="space-y-3">
+                      <pre className="text-[#a4e5e0] whitespace-pre-wrap leading-relaxed font-mono bg-[#02181b] p-3 rounded border border-[#003734]">
+                        {activeRecord.txtContent}
+                      </pre>
+                    </div>
                   ) : (
                     <div className="space-y-4 text-[#edfffe]">
                       <div className="p-3 bg-[#02181b] rounded-lg border border-[#00d2ff]/30 flex items-center justify-between">

@@ -190,71 +190,45 @@ export async function checkCouponValidity(rawCode: string): Promise<{
   coupon?: CouponRecord;
   error?: string;
 }> {
-  const cleanCode = (rawCode || '').trim().toUpperCase();
+  const cleanCode = (rawCode || "").trim().toUpperCase();
   if (!cleanCode) {
-    return { valid: false, error: 'Digite um código de ativação ou desconto.' };
+    return { valid: false, error: "Digite um código de ativação ou desconto." };
   }
 
+  // 1. Tenta validar no servidor backend protegido (Admin SDK)
   try {
-    const couponRef = doc(db, 'coupons', cleanCode);
-    const snap = await getDoc(couponRef);
-
-    if (snap.exists()) {
-      const data = snap.data() as CouponRecord;
-      if (data.used) {
-        return { 
-          valid: false, 
-          error: 'Este código já foi utilizado e não pode ser reutilizado. Cada código é único e de uso único.' 
-        };
+    const backendUrl = import.meta.env.VITE_API_URL || "";
+    const res = await fetch(`${backendUrl}/api/coupons/check`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: cleanCode }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.valid && data.coupon) {
+        return { valid: true, coupon: data.coupon };
       }
-      return { valid: true, coupon: data };
+      return { valid: false, error: data.error || "Código inválido ou já utilizado." };
     }
+  } catch (apiErr) {
+    console.warn("[CouponService] Backend indisponível para checagem, usando validação local:", apiErr);
+  }
 
-    // Se ainda não existe no Firestore, verifica a lista padrão
-    const defaultData = DEFAULT_COUPONS[cleanCode];
-    if (defaultData) {
-      const newCouponRecord: CouponRecord = {
+  // Fallback seguro se backend não responder
+  const defaultData = DEFAULT_COUPONS[cleanCode];
+  if (defaultData) {
+    return {
+      valid: true,
+      coupon: {
         ...defaultData,
         used: false,
         createdAt: new Date().toISOString(),
-      };
-      // Salva no Firestore para controle de unicidade
-      try {
-        await setDoc(couponRef, newCouponRecord);
-      } catch (err) {
-        console.warn('[CouponService] Aviso ao persistir cupom inicial:', err);
-      }
-      return { valid: true, coupon: newCouponRecord };
-    }
-
-    return { 
-      valid: false, 
-      error: 'Código inválido ou inexistente. Verifique os caracteres e tente novamente.' 
+      },
     };
-  } catch (err: any) {
-    console.warn('[CouponService] Erro ao consultar cupom:', err);
-    // Fallback para lista em memória se houver oscilação
-    const defaultData = DEFAULT_COUPONS[cleanCode];
-    if (defaultData) {
-      return {
-        valid: true,
-        coupon: {
-          ...defaultData,
-          used: false,
-          createdAt: new Date().toISOString(),
-        }
-      };
-    }
-    return { valid: false, error: 'Não foi possível validar o código no momento.' };
   }
+  return { valid: false, error: "Código inválido ou inexistente." };
 }
 
-/**
- * Aplica um Código de Ativação (100% grátis):
- * - Não redireciona ao checkout;
- * - Marca o código como USADO imediatamente (impedindo qualquer reuso global);
- * - Credita 30 dias de acesso no plano mensal da conta do usuário.
- */
 export async function redeemActivationCode(
   rawCode: string,
   user: FirebaseUser,
@@ -265,89 +239,75 @@ export async function redeemActivationCode(
   updatedProfile?: UserProfileData;
   error?: string;
 }> {
-  const check = await checkCouponValidity(rawCode);
-  if (!check.valid || !check.coupon) {
-    return {
-      success: false,
-      message: '',
-      error: check.error || 'Código inválido.',
-    };
+  const cleanCode = (rawCode || "").trim().toUpperCase();
+  if (!cleanCode) {
+    return { success: false, message: "", error: "Código inválido." };
   }
-
-  if (check.coupon.type !== 'activation') {
-    return {
-      success: false,
-      message: '',
-      error: 'Este é um código de desconto, não de ativação direta.',
-    };
-  }
-
-  const cleanCode = check.coupon.code;
-  const now = new Date().toISOString();
 
   try {
-    // 1. Marca como usado no Firestore imediatamente
-    const couponRef = doc(db, 'coupons', cleanCode);
-    await setDoc(couponRef, {
-      ...check.coupon,
-      used: true,
-      usedByUserId: user.uid,
-      usedByEmail: user.email || '',
-      usedAt: now,
-    }, { merge: true });
+    const idToken = await user.getIdToken();
+    const backendUrl = import.meta.env.VITE_API_URL || "";
 
-    // 2. Credita 30 dias de Plano Mensal na conta do usuário
-    const updated = await creditUserPlanValidity(user.uid, 'monthly', {
-      depositId: `ATIVACAO-${cleanCode}-${Date.now()}`,
-      amount: 0,
-      payerDocument: 'CODIGO-ATIVACAO',
-      qrCopyPaste: `ATIVACAO_30_DIAS_${cleanCode}`,
+    const res = await fetch(`${backendUrl}/api/coupons/redeem`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({ code: cleanCode, action: "redeem_activation" }),
     });
 
-    return {
-      success: true,
-      message: 'Código de ativação aplicado, sua conta já está ativa por 30 dias',
-      updatedProfile: updated,
-    };
-  } catch (err: any) {
-    console.error('[CouponService] Erro ao resgatar código de ativação:', err);
+    const data = await res.json();
+    if (res.ok && data.success) {
+      return {
+        success: true,
+        message: data.message || "Código de ativação aplicado, sua conta já está ativa por 30 dias",
+        updatedProfile: data.updatedProfile,
+      };
+    }
+
     return {
       success: false,
-      message: '',
-      error: err?.message || 'Falha ao ativar o plano com o código.',
+      message: "",
+      error: data.error || "Falha ao ativar o código promocional no servidor.",
+    };
+  } catch (err: any) {
+    console.error("[CouponService] Erro ao resgatar código:", err);
+    return {
+      success: false,
+      message: "",
+      error: err?.message || "Falha ao processar código de ativação.",
     };
   }
 }
 
-/**
- * Queima/Consome o código de desconto antes de ir para o pagamento:
- * Conforme exigido: "caso o pagamento não seja concluído esse código de desconto será perdido"
- */
 export async function burnDiscountCoupon(
   rawCode: string,
   user: FirebaseUser
 ): Promise<{ success: boolean; error?: string }> {
-  const check = await checkCouponValidity(rawCode);
-  if (!check.valid || !check.coupon) {
-    return { success: false, error: check.error || 'Código inválido.' };
-  }
-
-  const cleanCode = check.coupon.code;
-  const now = new Date().toISOString();
+  const cleanCode = (rawCode || "").trim().toUpperCase();
+  if (!cleanCode) return { success: false, error: "Código inválido." };
 
   try {
-    const couponRef = doc(db, 'coupons', cleanCode);
-    await setDoc(couponRef, {
-      ...check.coupon,
-      used: true,
-      usedByUserId: user.uid,
-      usedByEmail: user.email || '',
-      usedAt: now,
-    }, { merge: true });
+    const idToken = await user.getIdToken();
+    const backendUrl = import.meta.env.VITE_API_URL || "";
 
-    return { success: true };
+    const res = await fetch(`${backendUrl}/api/coupons/redeem`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({ code: cleanCode, action: "burn_discount" }),
+    });
+
+    const data = await res.json();
+    if (res.ok && data.success) {
+      return { success: true };
+    }
+    return { success: false, error: data.error || "Erro ao aplicar cupom de desconto." };
   } catch (err: any) {
-    console.warn('[CouponService] Erro ao consumir cupom:', err);
+    console.warn("[CouponService] Erro ao queimar cupom:", err);
     return { success: false, error: err?.message };
   }
 }

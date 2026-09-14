@@ -62,9 +62,9 @@ export const SmartMapsModal: React.FC<SmartMapsModalProps> = ({
   const markerRef = useRef<L.Marker | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
 
-  // Google Maps API Key State
+  // Google Maps API Key State (configuração opcional pelo usuário em runtime)
   const [googleMapsKey, setGoogleMapsKey] = useState<string>(() => {
-    return localStorage.getItem('google_maps_api_key') || 'AIzaSyAlidisq7Grsa8TNFjUYRdZPAetyBQRKHY';
+    return localStorage.getItem('google_maps_api_key') || '';
   });
   const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
 
@@ -88,7 +88,7 @@ export const SmartMapsModal: React.FC<SmartMapsModalProps> = ({
   // Posição inicial: Av. Prefeito João de Deus Campos, 75 - Ibirité, MG
   const defaultCoords: [number, number] = [-20.0098, -44.0902];
 
-  // Carrega chave do servidor caso configurada
+  // Carrega status da API sem expor chave secreta
   useEffect(() => {
     fetch('/api/maps/config')
       .then((res) => res.json())
@@ -916,7 +916,7 @@ export const SmartMapsModal: React.FC<SmartMapsModalProps> = ({
                   <div className="mt-3 rounded-[8px] overflow-hidden border border-[#004d47] bg-[#011413] relative group">
                     <div className="relative aspect-[16/8] w-full bg-[#012624] overflow-hidden">
                       <img
-                        src={`https://maps.googleapis.com/maps/api/streetview?size=640x320&location=${selectedAddress.lat},${selectedAddress.lng}&fov=90&heading=235&pitch=10&key=${googleMapsKey}`}
+                        src={googleMapsKey ? `https://maps.googleapis.com/maps/api/streetview?size=640x320&location=${selectedAddress.lat},${selectedAddress.lng}&fov=90&heading=235&pitch=10&key=${googleMapsKey}` : `/api/maps/streetview?lat=${selectedAddress.lat}&lng=${selectedAddress.lng}&size=640x320`}
                         alt={`Fachada ${selectedAddress.street}`}
                         className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                         onError={(e) => {

@@ -118,20 +118,6 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
         </div>
-
-        <span className="hidden xl:inline-block w-px h-6 bg-[#003734]"></span>
-
-        {/* Server Node Indicator */}
-        <div className="hidden xl:flex items-center gap-3 text-xs tracking-[0.08em] text-[#bbc7c6]">
-          <span className="uppercase text-[11px] font-mono">
-            CLUSTER: <span className="text-[#ffffff] font-medium">{socketId ? `SHAZAM_${socketId.slice(0, 6).toUpperCase()}` : 'SHAZAM_CORE_01'}</span>
-          </span>
-          <span className="w-px h-3.5 bg-[#003734]"></span>
-          <span className="uppercase text-[11px] text-[#cbfffc] flex items-center gap-1.5 font-mono">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#cbfffc]"></span>
-            STREAM ATIVO
-          </span>
-        </div>
       </div>
 
       {/* Right: Telemetry, Pricing & User Actions */}
@@ -248,6 +234,7 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="sm:hidden text-[11px]">Entrar</span>
           </button>
         )}
+
 
         {/* BUSCAS PRO Animated Button */}
         <button

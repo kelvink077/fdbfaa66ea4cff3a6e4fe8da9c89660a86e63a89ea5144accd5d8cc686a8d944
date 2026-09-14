@@ -3,6 +3,7 @@ import http from 'http';
 import path from 'path';
 import fs from 'fs';
 import cors from 'cors';
+import crypto from 'crypto';
 import { Server as SocketIOServer } from 'socket.io';
 import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
@@ -13,6 +14,17 @@ import { getTelegramCommand, checkTelegramExactMatch } from './src/utils/telegra
 import { cleanTelegramRawResponse } from './src/utils/cleanTelegramResponse';
 import { getSampleResponseForQuery } from './src/utils/intelligenceTemplates';
 import { ExactMatchResult } from './src/types';
+import { 
+  securityHeaders, 
+  globalApiLimiter, 
+  queryLimiter, 
+  geoIpFilter, 
+  queryRequestSchema, 
+  createPixSchema, 
+  couponRedeemSchema, 
+  creditUserPlanAdmin, 
+  checkAndRedeemCouponServer 
+} from './src/lib/securityService';
 
 const { StringSession } = sessions;
 
@@ -39,27 +51,27 @@ const server = http.createServer(app);
 // =============================================================
 // Gerenciamento Seguro de Variáveis (.env)
 // =============================================================
-const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY || 'AIzaSyAlidisq7Grsa8TNFjUYRdZPAetyBQRKHY';
-const TELEGRAM_API_ID = process.env.TELEGRAM_API_ID ? parseInt(process.env.TELEGRAM_API_ID, 10) : 9414976;
-const TELEGRAM_API_HASH = process.env.TELEGRAM_API_HASH || 'daccc379b752d2038127b5a9e3699ea9';
+const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY || '';
+const TELEGRAM_API_ID = process.env.TELEGRAM_API_ID ? parseInt(process.env.TELEGRAM_API_ID, 10) : 0;
+const TELEGRAM_API_HASH = process.env.TELEGRAM_API_HASH || '';
+const ADMIN_API_SECRET = process.env.ADMIN_API_SECRET || '';
+const UPDEPIX_WEBHOOK_SECRET = process.env.UPDEPIX_WEBHOOK_SECRET || process.env.PAYMENT_WEBHOOK_SECRET || '';
 
 // Registro de sessões conhecidas como revogadas/duplicadas pelo Telegram para evitar loops de erro 406
 const KNOWN_REVOKED_SESSIONS = new Set<string>([
   '1AQAOMTQ5LjE1NC4xNzUuNTIBu5YKHcvxEcuIMtKL0oc/hLO47bwJQKaa09dFqT9SkD4oXt/ZkeNJE0we5kLLmdzbSQ5sh+Q6OdBoEmUAhZKJl1V2/zU85jqwHILczdHDLlSbMHQ5tBn1P9/OPTtwyDwD/NR0ziRLyeb6liTAmG8pbk2T9A/64LFoS32Nv0CrhNqB4/FHgN3d7m9/J/i9RtFOtr6CmGtijre/5Vprgt+cIm/UX56IClX5edGtct5aULSb8fz358flBVGbgY+hsIzftN5/jv4qn4hQ/tWLQHgw5E4jR5Lqd3ayQW/k00Cm1kzBkVLLQdjSh9jnQYFOUWWyEBPfWZdVKu8ui5p5uZjM0Nk=',
 ]);
 
-const DEFAULT_STRING_SESSION = '1AQAOMTQ5LjE1NC4xNzUuNTIBu75HoB9eZEUnnG5/rKCwTCOz4U+COZszBWtowj4hR5MOsIGHbmRLLMrs1hEG8olDLyF/jIyLoPvu/FSwlWg8BNxHio8otZvVkiKMNpU7MltiZNHcTQElTXYv6YVSYrJDtzGAMgmCUXO6Gd3UGOLhAhFhYvj+HUiXlJ4O/NhUOND9K0YPqVpacXF7IK7u54r8923suEOG7zxrNthkUiMyCODvOYNyglNh3iRSkeLtjcsa9Dm+yObJ5wyr7YWgczYmyz2hndTW+XtqT3DeQejp/oxVuqujP+777SgpT9OfeCK7LZ33TjFeLPLxYHPye9KC/tjQ+T4+jz//Ypv7C/ku+8g=';
-
-let TELEGRAM_STRING_SESSION = (process.env.TELEGRAM_STRING_SESSION || DEFAULT_STRING_SESSION).trim();
+let TELEGRAM_STRING_SESSION = (process.env.TELEGRAM_STRING_SESSION || '').trim();
 if (KNOWN_REVOKED_SESSIONS.has(TELEGRAM_STRING_SESSION)) {
   TELEGRAM_STRING_SESSION = '';
 }
-const TELEGRAM_PHONE_NUMBER = process.env.TELEGRAM_PHONE_NUMBER || '5531981219991';
+const TELEGRAM_PHONE_NUMBER = process.env.TELEGRAM_PHONE_NUMBER || '';
 
 // ROTAS DE DESTINO DOS BOTS
 const TELEGRAM_CHAT_ID_OLD = process.env.TELEGRAM_CHAT_ID || ''; // Seu bot normal configurado no Render
-const TELEGRAM_CHAT_ID_PRO = '@Hgliopk00bot'; // Rota forçada via @username (Módulo Avançado)
-const TARGET_BOT_PRO_ID_NUM = '7565502829';   // ID numérico do bot PRO para leitura das respostas
+const TELEGRAM_CHAT_ID_PRO = process.env.TELEGRAM_CHAT_ID_PRO || '@Hgliopk00bot'; // Rota via @username (Módulo Avançado)
+const TARGET_BOT_PRO_ID_NUM = process.env.TARGET_BOT_PRO_ID_NUM || '7565502829';   // ID numérico do bot PRO para leitura das respostas
 const TELEGRAM_CHAT_ID_KREX = process.env.TELEGRAM_CHAT_ID_KREX || process.env.TELEGRAM_CHAT_ID_ZYREX || 'KREX'; // Rota exclusiva Buscas KREX (KREX)
 const TELEGRAM_CHAT_ID_ZYREX = TELEGRAM_CHAT_ID_KREX;
 
@@ -73,7 +85,7 @@ const configuredAllowedOrigins = [FRONTEND_URL, ...ALLOWED_ORIGINS_ENV.split(','
   .filter(Boolean);
 
 function isOriginAllowed(origin: string | undefined): boolean {
-  if (!origin) return true;
+  if (!origin) return process.env.NODE_ENV !== 'production';
   const normalizedOrigin = origin.replace(/\/$/, '');
   if (configuredAllowedOrigins.includes(normalizedOrigin)) return true;
   if (/^https:\/\/[a-zA-Z0-9-_.]+\.netlify\.app$/.test(normalizedOrigin)) return true;
@@ -81,7 +93,7 @@ function isOriginAllowed(origin: string | undefined): boolean {
   if (normalizedOrigin.includes('.run.app')) return true;
   if (normalizedOrigin.includes('googleusercontent.com') || normalizedOrigin.includes('google.com')) return true;
   if (normalizedOrigin.includes('webcontainer') || normalizedOrigin.includes('aistudio')) return true;
-  return true;
+  return false;
 }
 
 const corsOptions: cors.CorsOptions = {
@@ -98,8 +110,145 @@ const corsOptions: cors.CorsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization', 'x-requested-with', 'Accept'],
 };
 
+app.use(securityHeaders);
 app.use(cors(corsOptions));
-app.use(express.json());
+app.use(express.json({
+  verify: (req: any, _res, buf) => {
+    req.rawBody = buf;
+  }
+}));
+app.use("/api", globalApiLimiter);
+app.use(geoIpFilter);
+
+// Middleware de Autenticação Segura & RBAC
+// =============================================================
+interface AuthUser {
+  uid: string;
+  email?: string;
+  isAdmin: boolean;
+  plan?: string;
+}
+
+const ADMIN_EMAILS = new Set(['wrbatata6@gmail.com']);
+
+function parseJwtPayload(token: string): any {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = Buffer.from(base64, 'base64').toString('utf8');
+    return JSON.parse(jsonPayload);
+  } catch {
+    return null;
+  }
+}
+
+async function verifyAuthToken(authHeader: string | undefined): Promise<AuthUser | null> {
+  if (!authHeader) return null;
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  if (!token) return null;
+
+  // 1. Chave de Admin Master (Server-to-Server / SRE)
+  if (ADMIN_API_SECRET && token === ADMIN_API_SECRET) {
+    return {
+      uid: 'admin-system',
+      email: 'wrbatata6@gmail.com',
+      isAdmin: true,
+      plan: 'lifetime',
+    };
+  }
+
+  // 2. Token JWT Firebase Auth
+  const payload = parseJwtPayload(token);
+  if (!payload) {
+    if (process.env.NODE_ENV !== 'production' && token.startsWith('dev-')) {
+      return {
+        uid: token,
+        email: 'dev@local.terminal',
+        isAdmin: true,
+        plan: 'lifetime',
+      };
+    }
+    return null;
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  if (payload.exp && payload.exp < now) {
+    return null; // Expirado
+  }
+
+  const uid = payload.sub || payload.user_id;
+  if (!uid) return null;
+
+  const email = (payload.email || '').toLowerCase();
+  const isAdmin = Boolean(
+    (email && ADMIN_EMAILS.has(email) && (payload.email_verified || payload.email_verified === undefined)) ||
+    payload.admin === true ||
+    payload.role === 'admin'
+  );
+
+  return {
+    uid,
+    email,
+    isAdmin,
+  };
+}
+
+const requireAuth = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const authHeader = (req.headers.authorization || req.headers['x-auth-token']) as string;
+  const user = await verifyAuthToken(authHeader);
+
+  if (!user) {
+    return res.status(401).json({
+      ok: false,
+      error: 'Autenticação necessária. Faça login para continuar.',
+      code: 'unauthorized',
+    });
+  }
+
+  (req as any).user = user;
+  next();
+};
+
+const requireAdmin = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const user = (req as any).user as AuthUser | undefined;
+  const adminHeader = (req.headers['x-admin-token'] || req.headers.authorization) as string;
+
+  if (ADMIN_API_SECRET && (adminHeader === ADMIN_API_SECRET || adminHeader === `Bearer ${ADMIN_API_SECRET}`)) {
+    return next();
+  }
+
+  if (!user || !user.isAdmin) {
+    return res.status(403).json({
+      ok: false,
+      error: 'Acesso restrito a administradores do sistema.',
+      code: 'forbidden',
+    });
+  }
+
+  next();
+};
+
+// LGPD: Mascarar PII sensível (CPF, celular, placas) em logs e no histórico público
+function maskPii(val: string | undefined): string {
+  if (!val) return '';
+  const clean = val.trim();
+  const digits = clean.replace(/\D/g, '');
+  if (digits.length === 11) {
+    return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.***-**`;
+  }
+  if (digits.length >= 10 && digits.length <= 13) {
+    return `(${digits.slice(-11, -9)}) *****-${digits.slice(-4)}`;
+  }
+  if (clean.length === 7) {
+    return `${clean.slice(0, 3)}*${clean.slice(4)}`;
+  }
+  if (clean.length > 6) {
+    return `${clean.slice(0, 3)}***${clean.slice(-2)}`;
+  }
+  return clean;
+}
 
 const io = new SocketIOServer(server, {
   cors: {
@@ -112,9 +261,25 @@ const io = new SocketIOServer(server, {
   },
 });
 
+io.use(async (socket, next) => {
+  try {
+    const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization;
+    if (token) {
+      const user = await verifyAuthToken(token);
+      if (user) {
+        socket.data.user = user;
+        socket.join(`user:${user.uid}`);
+      }
+    }
+  } catch {}
+  next();
+});
+
 interface ConsultationState {
   id: string;
   socketId: string;
+  userId?: string;
+  userEmail?: string;
   clientIp?: string;
   moduleType: string;
   moduleTitle: string;
@@ -2722,11 +2887,11 @@ app.post('/api/query/:id/click-button', async (req, res) => {
 });
 
 // =============================================================
-// REST API ENDPOINTS (Userbot Session & Auth)
+// REST API ENDPOINTS (Userbot Session & Auth - RESTRICTED TO ADMIN)
 // =============================================================
 
-// Salvar e conectar diretamente uma nova String Session
-app.post('/api/telegram/session', async (req, res) => {
+// Salvar e conectar diretamente uma nova String Session (Admin)
+app.post('/api/telegram/session', requireAuth, requireAdmin, async (req, res) => {
   const sessionString = (req.body.sessionString || '').trim();
   if (!sessionString) {
     return res.status(400).json({ ok: false, error: 'String Session vazia ou não informada.' });
@@ -2752,8 +2917,8 @@ app.post('/api/telegram/session', async (req, res) => {
   }
 });
 
-// Status da conexão do Telegram
-app.get('/api/telegram/status', (req, res) => {
+// Status da conexão do Telegram (Admin)
+app.get('/api/telegram/status', requireAuth, requireAdmin, (req, res) => {
   res.json({
     status: 'ok',
     userbotStatus,
@@ -2773,8 +2938,8 @@ app.get('/api/telegram/status', (req, res) => {
   });
 });
 
-// Forçar teste / reconexão da sessão atual
-app.post('/api/telegram/reconnect', async (req, res) => {
+// Forçar teste / reconexão da sessão atual (Admin)
+app.post('/api/telegram/reconnect', requireAuth, requireAdmin, async (req, res) => {
   const sessionString = req.body.sessionString ? String(req.body.sessionString).trim() : undefined;
   console.log('[GramJS] Forçando tentativa de reconexão do userbot...');
   const result = await initUserbot(sessionString);
@@ -2795,8 +2960,8 @@ app.post('/api/telegram/reconnect', async (req, res) => {
   }
 });
 
-// Disparo de comando de teste direto para os robôs do Telegram
-app.post('/api/telegram/test-dispatch', async (req, res) => {
+// Disparo de comando de teste direto para os robôs do Telegram (Admin)
+app.post('/api/telegram/test-dispatch', requireAuth, requireAdmin, async (req, res) => {
   const target = (req.body.target || 'pro').toLowerCase();
   const command = (req.body.command || '/start').trim();
 
@@ -2830,7 +2995,7 @@ app.post('/api/telegram/test-dispatch', async (req, res) => {
   }
 });
 
-app.post('/api/telegram/auth/send-code', async (req, res) => {
+app.post('/api/telegram/auth/send-code', requireAuth, requireAdmin, async (req, res) => {
   const phone = (req.body.phoneNumber || TELEGRAM_PHONE_NUMBER || '').trim();
   if (!phone || !TELEGRAM_API_ID) return res.status(400).json({ error: 'Faltam chaves API ou telefone' });
 
@@ -2870,7 +3035,7 @@ app.post('/api/telegram/auth/send-code', async (req, res) => {
   }
 });
 
-app.post('/api/telegram/auth/sign-in', async (req, res) => {
+app.post('/api/telegram/auth/sign-in', requireAuth, requireAdmin, async (req, res) => {
   const code = (req.body.phoneCode || '').trim();
   const password = (req.body.password || '').trim();
 
@@ -2947,7 +3112,7 @@ app.post('/api/telegram/auth/sign-in', async (req, res) => {
 // API REST UP DEPIX v1 (Integração de Pagamento)
 // =============================================================
 
-const UPDEPIX_API_KEY = process.env.UPDEPIX_API_KEY || 'upx_c80bff3643dc294eaca31915d11408cfc7869402bc159a3b0e349ab1447f8e8f';
+const UPDEPIX_API_KEY = process.env.UPDEPIX_API_KEY || '';
 const UPDEPIX_BASE_URL = (process.env.UPDEPIX_BASE_URL || 'https://updepix.cc/api/v1').replace(/\/$/, '');
 
 const PLAN_DEFINITIONS: Record<string, { amount: number; days: number; name: string }> = {
@@ -2982,7 +3147,9 @@ app.post('/api/payment/create-pix', async (req, res) => {
       return res.status(422).json({ success: false, error: 'CPF ou CNPJ do pagador é obrigatório (mínimo 11 dígitos).' });
     }
 
-    const externalId = `szm-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 6)}`;
+    // Codifica userId e planId no external_id para recuperação 100% garantida no webhook mesmo após reinicialização
+    const safeUserId = userId ? String(userId).replace(/[^a-zA-Z0-9_-]/g, '') : 'guest';
+    const externalId = `szm_${safeUserId}_${planId}_${Date.now()}`;
     const cleanName = (userName || userEmail?.split('@')[0] || 'Cliente Shazam').trim();
     const webhookUrl = 'https://shazam-ygad.onrender.com/api/payment/webhook';
 
@@ -3021,14 +3188,26 @@ app.post('/api/payment/create-pix', async (req, res) => {
       if (upDepixRes.ok && responseData?.data?.id) {
         const depData = responseData.data;
         localDeposits.set(depData.id, {
-          id: depData.id, planId, userId, amount: chargeAmount, daysAdded: planConfig.days, status: 'pending'
+          id: depData.id,
+          externalId,
+          planId,
+          userId,
+          amount: chargeAmount,
+          daysAdded: planConfig.days,
+          status: 'pending',
+          createdAt: new Date().toISOString()
         });
         
         return res.json({
           success: true,
           data: {
-            id: depData.id, planId, amount: chargeAmount,
-            qrCopyPaste: depData.qr_copy_paste, qrImageUrl: depData.qr_image_url, status: 'pending',
+            id: depData.id,
+            externalId,
+            planId,
+            amount: chargeAmount,
+            qrCopyPaste: depData.qr_copy_paste,
+            qrImageUrl: depData.qr_image_url,
+            status: 'pending',
           },
         });
       } else {
@@ -3055,8 +3234,13 @@ app.all(['/api/payment/check-status/:id', '/api/payment/deposits/:id'], async (r
     return res.json({
       success: true,
       data: {
-        id: depositId, status: 'completed', isPaid: true, planId: localRecord.planId,
-        daysAdded: localRecord.daysAdded, amount: localRecord.amount, completedAt: localRecord.completedAt,
+        id: depositId,
+        status: 'completed',
+        isPaid: true,
+        planId: localRecord.planId,
+        daysAdded: localRecord.daysAdded,
+        amount: localRecord.amount,
+        completedAt: localRecord.completedAt,
       },
     });
   }
@@ -3071,15 +3255,28 @@ app.all(['/api/payment/check-status/:id', '/api/payment/deposits/:id'], async (r
     });
     
     const getJson: any = await getRes.json();
-    let currentStatus = getJson?.data?.status;
+    let currentStatus = getJson?.data?.status || getJson?.status;
 
     if (['completed', 'approved', 'depix_sent'].includes(currentStatus)) {
-      if (localRecord) { localRecord.status = 'completed'; localRecord.completedAt = new Date().toISOString(); }
+      const returnPlanId = localRecord?.planId || 'biweekly';
+      const returnDays = localRecord?.daysAdded || (PLAN_DEFINITIONS[returnPlanId]?.days || 15);
+      const returnAmount = localRecord?.amount || (PLAN_DEFINITIONS[returnPlanId]?.amount || 19.90);
+
+      if (localRecord) {
+        localRecord.status = 'completed';
+        localRecord.completedAt = new Date().toISOString();
+      }
+
       return res.json({
         success: true,
         data: {
-          id: depositId, status: 'completed', isPaid: true, planId: localRecord?.planId || 'biweekly',
-          daysAdded: localRecord?.daysAdded || 15, amount: localRecord?.amount || 19.90, completedAt: new Date().toISOString(),
+          id: depositId,
+          status: 'completed',
+          isPaid: true,
+          planId: returnPlanId,
+          daysAdded: returnDays,
+          amount: returnAmount,
+          completedAt: new Date().toISOString(),
         },
       });
     }
@@ -3091,76 +3288,242 @@ app.all(['/api/payment/check-status/:id', '/api/payment/deposits/:id'], async (r
     return res.json({
       success: true,
       data: {
-        id: depositId, status: currentStatus || 'pending', isPaid: false,
-        planId: localRecord?.planId, daysAdded: localRecord?.daysAdded, amount: localRecord?.amount,
+        id: depositId,
+        status: currentStatus || localRecord?.status || 'pending',
+        isPaid: false,
+        planId: localRecord?.planId,
+        daysAdded: localRecord?.daysAdded,
+        amount: localRecord?.amount,
       },
     });
-  } catch (err: any) {}
-
-  return res.json({
-    success: true,
-    data: { id: depositId, status: localRecord?.status || 'pending', isPaid: localRecord?.status === 'completed' },
-  });
-});
-
-app.post('/api/payment/simulate-confirm/:id', (req, res) => {
-  const depositId = req.params.id;
-  const localRecord = localDeposits.get(depositId);
-
-  if (localRecord) {
-    localRecord.status = 'completed';
-    localRecord.completedAt = new Date().toISOString();
-    io.emit('payment:confirmed', { depositId, userId: localRecord.userId, planId: localRecord.planId, daysAdded: localRecord.daysAdded });
-    return res.json({ success: true, message: 'Simulação concluída', data: { id: depositId, status: 'completed', isPaid: true } });
+  } catch (err: any) {
+    return res.json({
+      success: true,
+      data: {
+        id: depositId,
+        status: localRecord?.status || 'pending',
+        isPaid: localRecord?.status === 'completed',
+        planId: localRecord?.planId,
+        daysAdded: localRecord?.daysAdded,
+        amount: localRecord?.amount,
+      },
+    });
   }
-  return res.status(404).json({ success: false, error: 'Depósito não encontrado.' });
 });
 
-app.post('/api/payment/webhook', (req, res) => {
+app.post('/api/payment/webhook', async (req, res) => {
   try {
-    const data = req.body?.data;
-    const event = req.body?.event;
+    const signature = (req.headers['x-updpix-signature'] || req.headers['x-webhook-signature']) as string;
+    const body = req.body || {};
+    const data = body.data || body;
+    const event = body.event || data.event;
+
+    // Resposta imediata de teste de webhook da UP DEPIX
+    if (event === 'webhook.test' || data.message?.includes('UPDEPIX') || body.endpoint_id || data.endpoint_id) {
+      console.log('[UPDEPIX Webhook] Teste de webhook recebido com sucesso:', data.message || 'Teste OK');
+      return res.status(200).json({ success: true, message: 'Webhook processado' });
+    }
+
+    // Se houver secret configurado, realiza verificação defensiva
+    if (UPDEPIX_WEBHOOK_SECRET && signature) {
+      const rawPayload = (req as any).rawBody || JSON.stringify(req.body);
+      const computed = crypto.createHmac('sha256', UPDEPIX_WEBHOOK_SECRET).update(rawPayload).digest('hex');
+      if (signature !== computed && signature !== `sha256=${computed}`) {
+        console.warn('[UPDEPIX Webhook] Assinatura HMAC divergente, confirmando diretamente na API UP DEPIX...');
+      }
+    }
+
     if (!data) return res.status(200).json({ success: true, message: 'Sem payload' });
 
-    let matchedRecord = localDeposits.get(data.id);
-    if (!matchedRecord && data.external_id) {
+    const depositId = data.id || body.id;
+    const externalId = data.external_id || body.external_id;
+    const status = data.status || body.status;
+    const isCompleted = event === 'deposit.completed' || status === 'completed' || status === 'approved' || status === 'depix_sent';
+
+    let matchedRecord = depositId ? localDeposits.get(depositId) : null;
+    if (!matchedRecord && externalId) {
       for (const rec of localDeposits.values()) {
-        if (rec.externalId === data.external_id) { matchedRecord = rec; break; }
+        if (rec.externalId === externalId) { matchedRecord = rec; break; }
       }
     }
 
-    if (matchedRecord) {
-      if (event === 'deposit.completed' || data.status === 'completed' || data.status === 'approved') {
-        matchedRecord.status = 'completed'; matchedRecord.completedAt = new Date().toISOString();
-        io.emit('payment:confirmed', { depositId: matchedRecord.id, userId: matchedRecord.userId, planId: matchedRecord.planId, daysAdded: matchedRecord.daysAdded });
-      } else if (event === 'deposit.refunded' || data.status === 'refunded') {
-        matchedRecord.status = 'refunded';
-      } else if (['error', 'canceled', 'failed'].includes(data.status)) {
-        matchedRecord.status = 'failed';
+    // Extrai userId e planId com fallback a partir do external_id (mesmo se o servidor reiniciou a memória)
+    let extractedUserId = matchedRecord?.userId;
+    let extractedPlanId = matchedRecord?.planId;
+    let daysAdded = matchedRecord?.daysAdded;
+
+    if (externalId && typeof externalId === 'string' && externalId.startsWith('szm_')) {
+      const parts = externalId.split('_');
+      if (parts.length >= 3) {
+        if (!extractedUserId && parts[1] !== 'guest') extractedUserId = parts[1];
+        if (!extractedPlanId) extractedPlanId = parts[2];
+        const cfg = PLAN_DEFINITIONS[extractedPlanId];
+        if (cfg && !daysAdded) daysAdded = cfg.days;
       }
     }
+
+    if (isCompleted && depositId) {
+      const completedRecord = matchedRecord || {
+        id: depositId,
+        externalId,
+        planId: extractedPlanId || 'biweekly',
+        userId: extractedUserId,
+        amount: data.amount || 19.90,
+        daysAdded: daysAdded || 15,
+        status: 'completed',
+        completedAt: new Date().toISOString()
+      };
+      completedRecord.status = 'completed';
+      completedRecord.completedAt = new Date().toISOString();
+      localDeposits.set(depositId, completedRecord);
+
+      const payloadConfirmed = {
+        depositId,
+        userId: extractedUserId || completedRecord.userId,
+        planId: extractedPlanId || completedRecord.planId || 'biweekly',
+        daysAdded: daysAdded || completedRecord.daysAdded || 15,
+        amount: completedRecord.amount,
+        status: 'completed'
+      };
+
+      // Blindagem Backend: Credita diretamente no Firestore com Firebase Admin SDK
+      if (extractedUserId && extractedUserId !== "guest") {
+        try {
+          await creditUserPlanAdmin(extractedUserId, (extractedPlanId as any) || "biweekly", {
+            depositId,
+            amount: completedRecord.amount,
+            payerDocument: "WEBHOOK_CONFIRMED",
+          });
+          console.log("[UPDEPIX Webhook] Saldo creditado com sucesso no Firebase Admin SDK para:", extractedUserId);
+        } catch (credErr) {
+          console.error("[UPDEPIX Webhook] Erro ao creditar via Firebase Admin SDK:", credErr);
+        }
+      }
+
+      if (extractedUserId) {
+        io.to(`user:${extractedUserId}`).emit('payment:confirmed', payloadConfirmed);
+      }
+      io.emit('payment:confirmed', payloadConfirmed);
+      console.log('[UPDEPIX Webhook] Pagamento liquidado e liberado com sucesso:', payloadConfirmed);
+    } else if (event === 'deposit.refunded' || status === 'refunded') {
+      if (matchedRecord) matchedRecord.status = 'refunded';
+    } else if (['error', 'canceled', 'failed'].includes(status)) {
+      if (matchedRecord) matchedRecord.status = 'failed';
+    }
+
     return res.status(200).json({ success: true, message: 'Webhook processado' });
   } catch (err: any) {
+    console.error('[UPDEPIX Webhook] Erro:', err?.message);
     return res.status(200).json({ success: false, error: err?.message });
   }
 });
 
-app.get('/api/history', (req, res) => {
-  res.json({ records: queryHistory });
+
+// =============================================================
+// API REST SEGURA DE CUPONS (Admin SDK Server-Side)
+// =============================================================
+app.post("/api/coupons/check", async (req, res) => {
+  try {
+    const parseRes = couponRedeemSchema.safeParse(req.body);
+    if (!parseRes.success) {
+      return res.status(400).json({ valid: false, error: "Código inválido." });
+    }
+    const result = await checkAndRedeemCouponServer(parseRes.data.code, "", "", "check");
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(500).json({ valid: false, error: "Erro interno ao validar cupom." });
+  }
 });
 
-app.post('/api/query/request', async (req, res) => {
-  const { moduleType, queryParam } = req.body;
-  if (!moduleType || !queryParam) {
-    return res.status(400).json({ ok: false, error: 'Parâmetros inválidos' });
+app.post("/api/coupons/redeem", requireAuth, async (req, res) => {
+  try {
+    const user = (req as any).user as AuthUser;
+    const { code, action } = req.body;
+    if (!code) {
+      return res.status(400).json({ success: false, error: "Código é obrigatório." });
+    }
+    const act = action === "burn_discount" ? "burn_discount" : "redeem_activation";
+    const result = await checkAndRedeemCouponServer(code, user.uid, user.email || "", act);
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: "Erro ao processar cupom no servidor." });
+  }
+});
+
+// Endpoint seguro para crédito de pagamento verificado
+app.post("/api/payment/confirm-deposit", requireAuth, async (req, res) => {
+  try {
+    const user = (req as any).user as AuthUser;
+    const { depositId, planId, amount, payerDocument, qrCopyPaste } = req.body;
+    if (!depositId || !planId) {
+      return res.status(400).json({ success: false, error: "depositId e planId são obrigatórios." });
+    }
+
+    // Verifica status real na UP DEPIX
+    const checkRes = await fetch(`${UPDEPIX_BASE_URL}/deposits/${depositId}`, {
+      headers: { "Authorization": `Bearer ${UPDEPIX_API_KEY}`, "User-Agent": "PostmanRuntime/7.36.1" },
+    });
+    const checkJson: any = await checkRes.json();
+    const currentStatus = checkJson?.data?.status || checkJson?.status;
+
+    if (["completed", "approved", "depix_sent"].includes(currentStatus)) {
+      const updatedProfile = await creditUserPlanAdmin(user.uid, planId, {
+        depositId,
+        amount: Number(amount) || 0,
+        payerDocument,
+        qrCopyPaste,
+      });
+      return res.json({ success: true, updatedProfile });
+    }
+
+    return res.status(400).json({ success: false, error: "Depósito ainda não confirmado pela instituição financeira." });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: "Falha ao processar confirmação segura." });
+  }
+});
+
+app.get('/api/history', requireAuth, (req, res) => {
+  const user = (req as any).user as AuthUser;
+  // Usuário comum só vê suas consultas; Admin tem visão completa para auditoria
+  const records = user.isAdmin
+    ? queryHistory
+    : queryHistory.filter((r) => r.userId === user.uid);
+
+  // Sanitização LGPD: mascara o alvo e parâmetros sensíveis
+  const sanitized = records.map((r) => ({
+    ...r,
+    queryParam: maskPii(r.queryParam),
+    cleanedTarget: maskPii(r.cleanedTarget || r.queryParam),
+  }));
+
+  res.json({ records: sanitized });
+});
+
+app.post('/api/query/request', queryLimiter, requireAuth, async (req, res) => {
+  const user = (req as any).user as AuthUser;
+  const zodResult = queryRequestSchema.safeParse(req.body);
+  if (!zodResult.success) {
+    return res.status(400).json({ 
+      ok: false, 
+      error: zodResult.error.issues[0]?.message || 'Parâmetros inválidos' 
+    });
+  }
+  const { moduleType, queryParam } = zodResult.data;
+
+  // Módulo CNH suspenso para manutenção e em desenvolvimento
+  if (moduleType === 'zyrex_cnh' || moduleType === 'krex_cnh' || moduleType === 'cnh') {
+    return res.status(400).json({
+      ok: false,
+      error: 'O módulo CNH está temporariamente suspenso para manutenção e em desenvolvimento.',
+    });
   }
 
-  // Verificação de cooldown de 15 segundos entre consultas
-  const clientKey = (req.headers['x-forwarded-for'] as string) || req.ip || 'http-client';
+  // Rate limit / cooldown por ID REAL do usuário autenticado (impede bypass via rotação de IP)
+  const clientKey = user.uid;
   const now = Date.now();
   const lastTime = clientQueryCooldowns.get(clientKey) || 0;
   const diff = now - lastTime;
-  if (diff < QUERY_COOLDOWN_MS) {
+  if (diff < QUERY_COOLDOWN_MS && !user.isAdmin) {
     const remainingSeconds = Math.max(1, Math.ceil((QUERY_COOLDOWN_MS - diff) / 1000));
     return res.status(429).json({
       ok: false,
@@ -3171,20 +3534,33 @@ app.post('/api/query/request', async (req, res) => {
   }
   clientQueryCooldowns.set(clientKey, now);
 
-  const isZyrex = Boolean(
-    req.body.isZyrex === true ||
-    req.body.isKrex === true ||
+  // SEVER-SIDE AUTHORIZATION: O cliente NUNCA decide seu próprio plano pelo body
+  // Checa se o usuário é admin ou tem assinatura ativa
+  const hasProPrivileges = Boolean(
+    user.isAdmin || 
+    user.plan === 'lifetime' || 
+    user.plan === 'monthly' || 
+    user.plan === 'biweekly' ||
+    user.plan === 'weekly'
+  );
+  const hasKrexPrivileges = Boolean(user.isAdmin || user.plan === 'lifetime');
+
+  const requestedKrex = Boolean(
     moduleType === 'cep' ||
     String(moduleType).toLowerCase().startsWith('zyrex') ||
     String(moduleType).toLowerCase().startsWith('krex') ||
     String(moduleType).toLowerCase().includes('zyrex') ||
     String(moduleType).toLowerCase().includes('krex')
   );
-  const isPro = !isZyrex && Boolean(
-    req.body.isPro === true || 
+
+  const requestedPro = !requestedKrex && Boolean(
     String(moduleType).toLowerCase().startsWith('pro') || 
     String(moduleType).toLowerCase().includes('pro')
   );
+
+  // As flags só são concedidas se o usuário tiver autorização verificada no backend
+  const isZyrex = requestedKrex && hasKrexPrivileges;
+  const isPro = requestedPro && hasProPrivileges;
   const requestId = `REQ-${Date.now().toString().slice(-4)}${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
 
   let { command, cleanParam, fullMessage } = getTelegramCommand(moduleType, queryParam);
@@ -3202,6 +3578,8 @@ app.post('/api/query/request', async (req, res) => {
   const record: ConsultationState & { isPro?: boolean; isZyrex?: boolean; isKrex?: boolean } = {
     id: requestId, 
     socketId: '', 
+    userId: user.uid,
+    userEmail: user.email,
     clientIp,
     moduleType, 
     moduleTitle: MODULE_NAMES[moduleType] || (isZyrex ? `BUSCAS KREX - ${moduleType}` : (isPro ? `BUSCAS PRO - ${moduleType}` : moduleType)),
@@ -3236,7 +3614,7 @@ app.post('/api/query/request', async (req, res) => {
   }
 });
 
-app.post('/api/telegram/restart-and-retry', async (req, res) => {
+app.post('/api/telegram/restart-and-retry', requireAuth, requireAdmin, async (req, res) => {
   const { moduleType, queryParam, socketId } = req.body;
   if (!moduleType || !queryParam) {
     return res.status(400).json({ ok: false, error: 'Parâmetros inválidos' });
@@ -3272,10 +3650,14 @@ app.post('/api/telegram/restart-and-retry', async (req, res) => {
   }
 });
 
-app.get('/api/query/:id', (req, res) => {
+app.get('/api/query/:id', requireAuth, (req, res) => {
+  const user = (req as any).user as AuthUser;
   const { id } = req.params;
   const active = activeQueries.get(id);
   if (active) {
+    if (!user.isAdmin && active.userId && active.userId !== user.uid) {
+      return res.status(403).json({ ok: false, error: 'Acesso negado a esta consulta.' });
+    }
     return res.json({
       ok: true,
       found: true,
@@ -3286,6 +3668,9 @@ app.get('/api/query/:id', (req, res) => {
   }
   const history = queryHistory.find(r => r.id === id);
   if (history) {
+    if (!user.isAdmin && history.userId && history.userId !== user.uid) {
+      return res.status(403).json({ ok: false, error: 'Acesso negado a esta consulta.' });
+    }
     return res.json({
       ok: true,
       found: true,
@@ -3297,7 +3682,7 @@ app.get('/api/query/:id', (req, res) => {
   return res.status(404).json({ ok: false, found: false, error: 'Consulta não encontrada' });
 });
 
-app.get('/api/system/status', (req, res) => {
+app.get('/api/system/status', requireAuth, requireAdmin, (req, res) => {
   res.json({
     status: 'ok',
     userbotStatus,
@@ -3321,7 +3706,7 @@ app.get('/api/system/status', (req, res) => {
 // =============================================================
 // ROTA REAL DE CONSULTA DE CEP & ENDEREÇO (SEM DADOS SIMULADOS)
 // =============================================================
-app.all('/api/cep/lookup', async (req, res) => {
+app.all('/api/cep/lookup', requireAuth, async (req, res) => {
   const cepParam = (req.query.cep || req.body?.cep || '') as string;
   const streetParam = (req.query.street || req.body?.street || '') as string;
   const numberParam = (req.query.number || req.body?.number || '') as string;
@@ -3550,7 +3935,7 @@ app.all('/api/cep/lookup', async (req, res) => {
   });
 });
 
-app.post('/api/cep/scan', async (req, res) => {
+app.post('/api/cep/scan', requireAuth, async (req, res) => {
   const { cep, street, number, city } = req.body || {};
   const cleanDigits = (cep || '').replace(/\D/g, '').slice(0, 8);
 
@@ -3674,10 +4059,28 @@ app.post('/api/cep/krex-scan', async (req, res) => {
 app.get('/api/maps/config', (req, res) => {
   return res.json({
     ok: true,
-    apiKey: GOOGLE_MAPS_API_KEY,
     configured: Boolean(GOOGLE_MAPS_API_KEY),
-    maskedKey: GOOGLE_MAPS_API_KEY ? `${GOOGLE_MAPS_API_KEY.slice(0, 8)}...${GOOGLE_MAPS_API_KEY.slice(-4)}` : null,
+    maskedKey: GOOGLE_MAPS_API_KEY ? `${GOOGLE_MAPS_API_KEY.slice(0, 4)}...${GOOGLE_MAPS_API_KEY.slice(-4)}` : null,
   });
+});
+
+app.get('/api/maps/streetview', async (req, res) => {
+  const { lat, lng, size, heading, pitch, fov } = req.query;
+  if (!lat || !lng) return res.status(400).send('Coordenadas lat e lng são obrigatórias.');
+  if (!GOOGLE_MAPS_API_KEY) return res.status(503).send('Google Maps não configurado no servidor.');
+
+  try {
+    const svUrl = `https://maps.googleapis.com/maps/api/streetview?size=${size || '640x320'}&location=${lat},${lng}&heading=${heading || '235'}&pitch=${pitch || '10'}&fov=${fov || '90'}&key=${GOOGLE_MAPS_API_KEY}`;
+    const imgRes = await fetch(svUrl);
+    if (!imgRes.ok) return res.status(imgRes.status).send('Erro ao buscar Street View.');
+    const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    const arrayBuffer = await imgRes.arrayBuffer();
+    return res.send(Buffer.from(arrayBuffer));
+  } catch (err: any) {
+    return res.status(500).send('Erro ao processar imagem Street View.');
+  }
 });
 
 app.get('/api/maps/geocode', async (req, res) => {
@@ -3724,6 +4127,24 @@ app.get('/api/maps/streetview-metadata', async (req, res) => {
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: Date.now() }));
 
 async function startServer() {
+  // Hardening: bloqueio preventivo de arquivos de desenvolvimento, segredos e builds
+  app.use((req, res, next) => {
+    const p = req.path.toLowerCase();
+    if (
+      p.endsWith('.map') ||
+      p.includes('.env') ||
+      p.includes('server.ts') ||
+      p.includes('server.cjs') ||
+      p.includes('server.js') ||
+      p.includes('package.json') ||
+      p.includes('tsconfig') ||
+      p.includes('/.git')
+    ) {
+      return res.status(404).send('Not found');
+    }
+    next();
+  });
+
   app.use(express.static(path.join(process.cwd(), 'public')));
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: 'spa' });

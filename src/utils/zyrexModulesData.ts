@@ -8,6 +8,10 @@ export interface KrexModuleInfo {
   defaultSample: string;
   category?: string;
   iconName: string;
+  suspended?: boolean;
+  isDevelopment?: boolean;
+  statusBadge?: string;
+  hidden?: boolean;
 }
 
 export type ZyrexModuleInfo = KrexModuleInfo;
@@ -83,6 +87,7 @@ export const KREX_MODULES_COL1: KrexModuleInfo[] = [
     inputHelper: 'Pesquisa cadastral por logradouro ou CEP',
     defaultSample: 'Av Paulista, 1000',
     iconName: 'MapPin',
+    hidden: true,
   },
   {
     id: 'zyrex_pix',
@@ -93,6 +98,7 @@ export const KREX_MODULES_COL1: KrexModuleInfo[] = [
     inputHelper: 'Localização de titular através da chave DICT Pix',
     defaultSample: '11984521920',
     iconName: 'Zap',
+    hidden: true,
   },
   {
     id: 'zyrex_pis',
@@ -208,6 +214,7 @@ export const KREX_MODULES_COL2: KrexModuleInfo[] = [
     inputHelper: 'Filtro de homônimos por data de nascimento (DD/MM/AAAA)',
     defaultSample: 'Carlos Silva 15/04/1985',
     iconName: 'Calendar',
+    hidden: true,
   },
   {
     id: 'zyrex_nome_uf',
@@ -218,6 +225,7 @@ export const KREX_MODULES_COL2: KrexModuleInfo[] = [
     inputHelper: 'Filtro geográfico estadual (ex: Nome SP / Nome RJ)',
     defaultSample: 'Carlos Silva SP',
     iconName: 'Compass',
+    hidden: true,
   },
   {
     id: 'zyrex_cep',
@@ -235,9 +243,13 @@ export const KREX_MODULES_COL2: KrexModuleInfo[] = [
     command: '/cnh',
     placeholder: '12345678901',
     inputLabel: 'Número do Registro da CNH',
-    inputHelper: 'Categoria, validade, prontuário e espelho de CNH',
+    inputHelper: 'Módulo suspenso temporariamente - Em desenvolvimento',
     defaultSample: '04981294821',
     iconName: 'Award',
+    suspended: true,
+    isDevelopment: true,
+    statusBadge: 'Em desenvolvimento',
+    hidden: true,
   },
 ];
 
@@ -246,6 +258,6 @@ export const ZYREX_MODULES_COL2 = KREX_MODULES_COL2;
 export const ALL_KREX_MODULES: KrexModuleInfo[] = [
   ...KREX_MODULES_COL1,
   ...KREX_MODULES_COL2,
-];
+].filter((mod) => !mod.hidden);
 
 export const ALL_ZYREX_MODULES: KrexModuleInfo[] = ALL_KREX_MODULES;

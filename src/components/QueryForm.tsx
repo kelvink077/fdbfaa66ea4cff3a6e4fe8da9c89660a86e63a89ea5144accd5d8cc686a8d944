@@ -8,7 +8,6 @@ import {
   ArrowUpRight,
   Sparkles,
   Bot,
-  Users,
   AlertTriangle,
   Lock,
   Crown
@@ -354,33 +353,6 @@ export const QueryForm: React.FC<QueryFormProps> = ({
             <span className="text-[#edfffe] font-medium">~1.5s</span>
           </div>
         </div>
-
-        {/* CEP Residents Sweep Special Banner */}
-        {moduleInfo.id === 'cep' && onOpenCepScan && (
-          <div className="mt-3 p-3 rounded-[8px] bg-gradient-to-r from-[#002b28] to-[#011d1c] border border-[#00827c] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-lg bg-[#00827c]/20 border border-[#79fbf5]/40 flex items-center justify-center shrink-0">
-                <Users className="w-4 h-4 text-[#79fbf5]" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-bold text-[#cbfffc] font-mono tracking-wide">
-                  VARREDURA COMPLETA DE MORADORES POR CEP
-                </p>
-                <p className="text-[11px] text-[#8ea3a1] leading-tight">
-                  Cruza todos os módulos que suportam CEP (busca inicial de até 1 min) e dossiê minucioso individual com acompanhamento passo a passo (até 7 min).
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => onOpenCepScan(inputValue || undefined)}
-              className="px-3.5 py-2 rounded-[6px] bg-gradient-to-r from-[#00827c] to-[#00a89f] hover:from-[#009b93] hover:to-[#00a89f] text-white font-mono font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-md shadow-[#00827c]/20 cursor-pointer shrink-0 transition-all hover:scale-[1.02]"
-            >
-              <Users className="w-3.5 h-3.5" />
-              <span>INICIAR VARREDURA</span>
-            </button>
-          </div>
-        )}
       </form>
     </div>
   );

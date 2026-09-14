@@ -83,6 +83,7 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
       case 'email': return <Mail className={iconClass} />;
       case 'placa': return <Car className={iconClass} />;
       case 'telefone': return <Phone className={iconClass} />;
+      case 'cep': return <MapPin className={iconClass} />;
       default: return <Sparkles className={iconClass} />;
     }
   };
@@ -170,34 +171,6 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
               </button>
             )}
           </div>
-
-          {onOpenSmartMaps && (
-            <button
-              type="button"
-              onClick={() => {
-                onOpenSmartMaps();
-                onClose();
-              }}
-              className="w-full flex items-center justify-center gap-2 p-2 rounded-[8px] bg-[#003734] hover:bg-[#004d47] text-[#cbfffc] border border-[#00827c] font-bold text-xs font-mono tracking-wider transition-colors cursor-pointer shadow-sm"
-            >
-              <MapPin className="w-3.5 h-3.5 text-[#cbfffc] animate-pulse" />
-              <span>SMART MAPS (GPS & MORADORES)</span>
-            </button>
-          )}
-
-          {onOpenCepScan && (
-            <button
-              type="button"
-              onClick={() => {
-                onOpenCepScan();
-                onClose();
-              }}
-              className="w-full flex items-center justify-center gap-2 p-2 rounded-[8px] bg-[#002b28] hover:bg-[#003f3b] text-[#79fbf5] border border-[#00827c] font-bold text-xs font-mono tracking-wider transition-colors cursor-pointer shadow-sm"
-            >
-              <Users className="w-3.5 h-3.5 text-[#79fbf5] animate-pulse" />
-              <span>VARREDURA CEP (TODOS MORADORES)</span>
-            </button>
-          )}
         </div>
 
         {/* Module lists */}

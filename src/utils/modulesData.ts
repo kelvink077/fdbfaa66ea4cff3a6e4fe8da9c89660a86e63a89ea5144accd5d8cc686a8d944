@@ -91,13 +91,13 @@ export const QUERY_MODULES: QueryModuleInfo[] = [
   },
   {
     id: 'cep',
-    title: 'CEP / ENDEREÇO',
-    subtitle: 'Moradores do CEP',
+    title: 'CEP',
+    subtitle: '',
     category: 'Veículos & Contato',
-    placeholder: '00000-000 ou Logradouro',
+    placeholder: '00000-000',
     iconName: 'MapPin',
     badge: 'Territorial',
-    description: 'Identificação de todos os moradores do CEP via varredura multimódulos (até 1 min) e dossiê aprofundado multi-pessoas passo a passo (até 7 min).',
+    description: 'Consulta cadastral e geográfica nacional por código de endereçamento postal (CEP).',
     defaultSample: '01418-100',
   },
 ];

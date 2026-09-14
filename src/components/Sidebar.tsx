@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { QueryModuleType } from '../types';
 import { QUERY_MODULES } from '../utils/modulesData';
+import { AuroraCurtainCanvas } from './AuroraCurtainCanvas';
 
 interface SidebarProps {
   selectedModule: QueryModuleType;
@@ -41,11 +42,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   return (
-    <aside className={`w-full lg:w-80 bg-[#011d1c] border-r border-[#003734] hidden lg:flex flex-col flex-shrink-0 justify-between ${className}`}>
-      <div className="py-6 px-5 overflow-y-auto space-y-7">
+    <aside className={`w-full lg:w-80 bg-[#011d1c] border-r border-[#003734] hidden lg:flex flex-col flex-shrink-0 justify-between relative overflow-hidden ${className}`}>
+      {/* Dynamic 60fps Silk Aurora Curtains Canvas Engine */}
+      <AuroraCurtainCanvas />
+
+      <div className="relative py-6 px-5 overflow-y-auto space-y-7 overflow-x-hidden z-10">
+        {/* Content wrapper with relative position to stay clearly above atmospheric layers */}
+        <div className="relative z-10 space-y-7">
         
         {/* Plan / Protocol Surface Card (Liquid Kelp #003734, 16px radius, no shadows) */}
-        <div className="p-5 rounded-[16px] bg-[#003734] border border-[#707777]/20">
+        <div className="p-5 rounded-[16px] bg-[#003734]/90 backdrop-blur-[4px] border border-[#707777]/20">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[10px] uppercase tracking-[0.15em] text-[#edfffe] font-medium flex items-center gap-2 font-mono">
               <span className="w-1.5 h-1.5 rounded-full bg-[#cbfffc] animate-pulse"></span>
@@ -67,7 +73,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span className="text-[#bbc7c6] text-[10px]">3 BASES</span>
           </div>
 
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             {cpfModules.map((module) => {
               const isSelected = selectedModule === module.id;
               const pendingCount = pendingCountByModule[module.id] || 0;
@@ -78,30 +84,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   key={module.id}
                   id={`btn-module-${module.id}`}
                   onClick={() => onSelectModule(module.id)}
-                  className={`w-full flex items-center justify-between px-3.5 py-3 rounded-[6px] transition-colors cursor-pointer text-left ${
+                  className={`w-full flex items-center justify-between px-3.5 py-3 rounded-[8px] transition-all duration-150 cursor-pointer text-left border ${
                     isSelected
-                      ? 'bg-[#003734] text-[#ffffff]'
-                      : 'text-[#bbc7c6] hover:bg-[#012624] hover:text-[#ffffff]'
+                      ? 'bg-[#003734] border-[#00ffa2]/40 text-[#ffffff] shadow-[0_0_12px_rgba(0,255,162,0.15)]'
+                      : 'bg-[#011d1c]/80 hover:bg-[#003734]/70 border-[#003734]/80 hover:border-[#00827c]/60 text-[#bbc7c6] hover:text-[#ffffff] backdrop-blur-[6px]'
                   }`}
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <span
                       className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                        isSelected ? 'bg-[#cbfffc]' : 'bg-[#707777]'
+                        isSelected ? 'bg-[#cbfffc] ring-2 ring-[#00ffa2]/40' : 'bg-[#707777]'
                       }`}
                     />
                     <div className="flex flex-col truncate">
                       <div className="flex items-center gap-1.5 truncate">
-                        <span className="truncate text-[13px] font-medium tracking-tight">
+                        <span className={`truncate text-[13px] font-medium tracking-tight ${isSelected ? 'text-[#ffffff] font-semibold' : 'text-[#e5eceb]'}`}>
                           {module.title}
                         </span>
                         {module.subtitle && (
-                          <span className={`text-[11px] font-normal truncate ${isSelected ? 'text-[#cbfffc]' : 'text-[#79fbf5]/80'}`}>
+                          <span className={`text-[11px] font-normal truncate ${isSelected ? 'text-[#cbfffc]' : 'text-[#79fbf5]/90'}`}>
                             {module.subtitle}
                           </span>
                         )}
                       </div>
-                      <span className="text-[10px] font-mono text-[#bbc7c6] uppercase tracking-[0.08em]">
+                      <span className={`text-[10px] font-mono uppercase tracking-[0.08em] ${isSelected ? 'text-[#a3e5df]' : 'text-[#8ea3a1]'}`}>
                         {cmd}
                       </span>
                     </div>
@@ -127,7 +133,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span className="text-[#bbc7c6] text-[10px]">5 BASES</span>
           </div>
 
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             {otherModules.map((module) => {
               const isSelected = selectedModule === module.id;
               const pendingCount = pendingCountByModule[module.id] || 0;
@@ -138,23 +144,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   key={module.id}
                   id={`btn-module-${module.id}`}
                   onClick={() => onSelectModule(module.id)}
-                  className={`w-full flex items-center justify-between px-3.5 py-3 rounded-[6px] transition-colors cursor-pointer text-left ${
+                  className={`w-full flex items-center justify-between px-3.5 py-3 rounded-[8px] transition-all duration-150 cursor-pointer text-left border ${
                     isSelected
-                      ? 'bg-[#003734] text-[#ffffff]'
-                      : 'text-[#bbc7c6] hover:bg-[#012624] hover:text-[#ffffff]'
+                      ? 'bg-[#003734] border-[#00ffa2]/40 text-[#ffffff] shadow-[0_0_12px_rgba(0,255,162,0.15)]'
+                      : 'bg-[#011d1c]/80 hover:bg-[#003734]/70 border-[#003734]/80 hover:border-[#00827c]/60 text-[#bbc7c6] hover:text-[#ffffff] backdrop-blur-[6px]'
                   }`}
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <span
                       className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                        isSelected ? 'bg-[#cbfffc]' : 'bg-[#707777]'
+                        isSelected ? 'bg-[#cbfffc] ring-2 ring-[#00ffa2]/40' : 'bg-[#707777]'
                       }`}
                     />
                     <div className="flex flex-col truncate">
-                      <span className="truncate text-[13px] font-medium tracking-tight">
+                      <span className={`truncate text-[13px] font-medium tracking-tight ${isSelected ? 'text-[#ffffff] font-semibold' : 'text-[#e5eceb]'}`}>
                         {module.title}
                       </span>
-                      <span className="text-[10px] font-mono text-[#bbc7c6] uppercase tracking-[0.08em]">
+                      <span className={`text-[10px] font-mono uppercase tracking-[0.08em] ${isSelected ? 'text-[#a3e5df]' : 'text-[#8ea3a1]'}`}>
                         {cmd}
                       </span>
                     </div>
@@ -171,6 +177,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               );
             })}
           </div>
+        </div>
         </div>
       </div>
 

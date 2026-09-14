@@ -10,7 +10,6 @@ import {
   Sparkles, 
   AlertCircle, 
   AlertTriangle,
-  Zap, 
   Crown,
   Calendar,
   ArrowRight,
@@ -19,6 +18,7 @@ import {
   Tag,
   ChevronDown
 } from 'lucide-react';
+import type { Socket } from 'socket.io-client';
 import type { User as FirebaseUser } from 'firebase/auth';
 import type { UserProfileData } from '../lib/firebase';
 import { creditUserPlanValidity, calculateAccountValidity } from '../lib/firebase';
@@ -34,6 +34,7 @@ export interface PixCheckoutModalProps {
   onPaymentSuccess?: (updatedProfile: UserProfileData) => void;
   initialDiscountCode?: string;
   initialDiscountedPrice?: number;
+  socket?: Socket | null;
 }
 
 const PLAN_META: Record<string, { name: string; price: string; amount: number; days: number; desc: string }> = {
@@ -69,6 +70,7 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
   onPaymentSuccess,
   initialDiscountCode,
   initialDiscountedPrice,
+  socket,
 }) => {
   const plan = PLAN_META[planId] || PLAN_META.weekly;
 
@@ -152,6 +154,30 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
       }
     };
   }, []);
+
+  // Real-time automatic confirmation via WebSocket
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleSocketPaymentConfirmed = async (data: any) => {
+      console.log('[PixCheckoutModal] Pagamento confirmado em tempo real via WebSocket:', data);
+      const isMyDeposit = depositId && data?.depositId === depositId;
+      const isMyUser = currentUser?.uid && data?.userId === currentUser.uid;
+
+      if (isMyDeposit || isMyUser) {
+        await handlePaymentConfirmed(
+          depositId || data?.depositId || 'pix-confirmed',
+          payerDocument.replace(/\D/g, ''),
+          qrCodeText
+        );
+      }
+    };
+
+    socket.on('payment:confirmed', handleSocketPaymentConfirmed);
+    return () => {
+      socket.off('payment:confirmed', handleSocketPaymentConfirmed);
+    };
+  }, [socket, depositId, currentUser?.uid, planId, payerDocument, qrCodeText]);
 
   if (!isOpen) return null;
 
@@ -282,7 +308,7 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
     setErrorMessage('');
 
     try {
-      const backendUrl = import.meta.env.VITE_API_URL || 'https://shazam-ygad.onrender.com';
+      const backendUrl = import.meta.env.VITE_API_URL || '';
 
       const response = await fetch(`${backendUrl}/api/payment/create-pix`, {
         method: 'POST',
@@ -331,77 +357,70 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
     }, 3500);
   };
 
+  // Confirmação e ativação automática da conta via API segura de Backend
+  const handlePaymentConfirmed = async (depId: string, docClean?: string, qrCodeStr?: string) => {
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+
+    if (currentUser) {
+      try {
+        const idToken = await currentUser.getIdToken();
+        const backendUrl = import.meta.env.VITE_API_URL || '';
+        const confirmRes = await fetch(`${backendUrl}/api/payment/confirm-deposit`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({
+            depositId: depId,
+            planId,
+            amount: currentAmount,
+            payerDocument: docClean || payerDocument.replace(/\D/g, ''),
+            qrCopyPaste: qrCodeStr || qrCodeText,
+          }),
+        });
+
+        const confirmData = await confirmRes.json();
+        if (confirmRes.ok && confirmData.success && confirmData.updatedProfile) {
+          setCreditedProfile(confirmData.updatedProfile);
+          if (onPaymentSuccess) {
+            onPaymentSuccess(confirmData.updatedProfile);
+          }
+        } else {
+          // Fallback se webhook já confirmou
+          const fallbackProfile = await creditUserPlanValidity(currentUser.uid, planId, {
+            depositId: depId,
+            amount: currentAmount,
+            payerDocument: docClean || payerDocument.replace(/\D/g, ''),
+            qrCopyPaste: qrCodeStr || qrCodeText,
+          });
+          setCreditedProfile(fallbackProfile);
+          if (onPaymentSuccess) onPaymentSuccess(fallbackProfile);
+        }
+      } catch (err) {
+        console.warn('[PixCheckoutModal] Erro ao creditar validade:', err);
+      }
+    }
+
+    setStep('success');
+  };
+
   // Check deposit status via backend -> UP DEPIX
   const checkStatus = async (depId: string, docClean: string, qrCodeStr: string, isManual = false) => {
     if (isManual) setIsCheckingStatus(true);
 
     try {
-      const backendUrl = import.meta.env.VITE_API_URL || 'https://shazam-ygad.onrender.com';
+      const backendUrl = import.meta.env.VITE_API_URL || '';
       const res = await fetch(`${backendUrl}/api/payment/check-status/${depId}`);
       const json = await res.json();
 
       if (json.success && json.data?.isPaid) {
-        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-
-        // Credit user account in Firestore and update profile
-        if (currentUser) {
-          const updated = await creditUserPlanValidity(currentUser.uid, planId, {
-            depositId: depId,
-            amount: currentAmount,
-            payerDocument: docClean,
-            qrCopyPaste: qrCodeStr,
-          });
-
-          setCreditedProfile(updated);
-          if (onPaymentSuccess) {
-            onPaymentSuccess(updated);
-          }
-        }
-
-        setStep('success');
+        await handlePaymentConfirmed(depId, docClean, qrCodeStr);
       }
     } catch (err) {
       console.warn('[PixCheckoutModal] Erro ao checar status:', err);
     } finally {
       if (isManual) setIsCheckingStatus(false);
-    }
-  };
-
-  // Simulate Instant Confirmation (for testing & immediate validation)
-  const handleSimulateInstantPayment = async () => {
-    if (!depositId) return;
-    setIsCheckingStatus(true);
-
-    try {
-      const backendUrl = import.meta.env.VITE_API_URL || 'https://shazam-ygad.onrender.com';
-      const res = await fetch(`${backendUrl}/api/payment/simulate-confirm/${depositId}`, {
-        method: 'POST',
-      });
-      const json = await res.json();
-
-      if (json.success) {
-        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-
-        if (currentUser) {
-          const updated = await creditUserPlanValidity(currentUser.uid, planId, {
-            depositId,
-            amount: currentAmount,
-            payerDocument: payerDocument.replace(/\D/g, ''),
-            qrCopyPaste: qrCodeText,
-          });
-
-          setCreditedProfile(updated);
-          if (onPaymentSuccess) {
-            onPaymentSuccess(updated);
-          }
-        }
-
-        setStep('success');
-      }
-    } catch (err: any) {
-      alert('Erro na confirmação: ' + (err?.message || 'Tente novamente'));
-    } finally {
-      setIsCheckingStatus(false);
     }
   };
 
@@ -765,13 +784,13 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
               </div>
             </div>
 
-            {/* Verification status and buttons */}
+            {/* Verification status and button */}
             <div className="space-y-2">
               <button
                 type="button"
                 onClick={() => checkStatus(depositId!, payerDocument.replace(/\D/g, ''), qrCodeText, true)}
                 disabled={isCheckingStatus}
-                className="w-full py-2.5 px-4 rounded-[8px] bg-[#003734] hover:bg-[#004743] border border-[#00827c]/60 hover:border-[#cbfffc] text-[#edfffe] font-mono text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full py-2.5 px-4 rounded-[8px] bg-[#003734] hover:bg-[#004743] border border-[#00827c]/60 hover:border-[#cbfffc] text-[#edfffe] font-mono text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 shadow-sm"
               >
                 {isCheckingStatus ? (
                   <>
@@ -785,22 +804,10 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
                   </>
                 )}
               </button>
-
-              {/* Dev/Test Simulator Button */}
-              <button
-                type="button"
-                onClick={handleSimulateInstantPayment}
-                disabled={isCheckingStatus}
-                className="w-full py-2 px-3 rounded-[6px] bg-[#ffd166]/15 hover:bg-[#ffd166]/25 border border-[#ffd166]/40 text-[#ffd166] font-mono text-[11px] uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                title="Simula a confirmação imediata do pagamento para testes e validação de crédito"
-              >
-                <Zap className="w-3 h-3 text-[#ffd166]" />
-                <span>Simular Confirmação Instantânea (Teste)</span>
-              </button>
             </div>
 
-            <p className="text-[10px] text-[#707777] font-mono mt-4">
-              O sistema verifica a cada 3.5 segundos. O crédito de +{plan.days} dias é aplicado automaticamente após a confirmação.
+            <p className="text-[10px] text-[#707777] font-mono mt-4 text-center">
+              O sistema verifica a cada 3.5 segundos. A confirmação é processada automaticamente via API assim que o PIX for pago.
             </p>
           </div>
         )}
@@ -808,31 +815,32 @@ export const PixCheckoutModal: React.FC<PixCheckoutModalProps> = ({
         {/* STEP 3: SUCCESS AND CREDITED ACCOUNT */}
         {step === 'success' && (
           <div className="text-center py-4">
-            <div className="w-16 h-16 rounded-full bg-[#cbfffc]/20 border border-[#cbfffc] flex items-center justify-center mx-auto mb-4 text-[#cbfffc] shadow-[0_0_20px_rgba(203,255,252,0.3)] animate-bounce">
-              <Check className="w-8 h-8 text-[#cbfffc]" />
+            <div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-400 flex items-center justify-center mx-auto mb-4 text-emerald-300 shadow-[0_0_20px_rgba(52,211,153,0.3)] animate-bounce">
+              <Check className="w-8 h-8 text-emerald-300" />
             </div>
 
-            <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-[#ffd166]/20 border border-[#ffd166]/40 text-[#ffd166] text-xs font-mono font-bold mb-2">
-              <Sparkles className="w-3.5 h-3.5 text-[#ffd166]" />
-              {isDirectActivation ? 'CONTA ATIVADA COM SUCESSO!' : 'PAGAMENTO CONFIRMADO COM SUCESSO!'}
+            <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-xs font-mono font-bold mb-2 shadow-[0_0_12px_rgba(16,185,129,0.2)]">
+              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+              <span>{isDirectActivation ? 'CONTA ATIVADA COM SUCESSO' : 'PAGAMENTO IDENTIFICADO COM SUCESSO'}</span>
             </div>
 
-            <h3 className="text-2xl font-bold text-[#ffffff] font-['DM_Sans',sans-serif] mt-1">
-              {isDirectActivation ? activationMsg : `${plan.name} Ativado!`}
+            <h3 className="text-2xl sm:text-3xl font-bold text-[#ffffff] font-['DM_Sans',sans-serif] mt-1 tracking-tight leading-snug">
+              {isDirectActivation ? activationMsg : 'Agradecemos o seu pagamento seu plano já esta ativo'}
             </h3>
-            <p className="text-xs text-[#bbc7c6] mt-1 max-w-sm mx-auto">
+            <p className="text-xs sm:text-sm text-[#cbfffc] mt-2 max-w-md mx-auto font-mono">
               {isDirectActivation ? (
                 <span>Código de ativação aplicado com sucesso. Sua conta possui acesso completo liberado por 30 dias.</span>
               ) : (
-                <span>Foram creditados com sucesso <strong className="text-[#cbfffc]">+{plan.days} dias de acesso irrestrito</strong> à sua conta no Shazam Buscas.</span>
+                <span>Identificamos a confirmação da sua transação. Foram creditados com sucesso <strong className="text-[#ffffff]">+{plan.days} dias de acesso irrestrito</strong> aos módulos de inteligência do Shazam Buscas.</span>
               )}
             </p>
 
             {/* Validity Information Box */}
-            <div className="my-6 p-4 rounded-[12px] bg-[#011d1c] border border-[#00827c]/40 text-left space-y-3">
+            <div className="my-6 p-4 rounded-[12px] bg-[#011d1c] border border-emerald-500/30 text-left space-y-3">
               <div className="flex items-center justify-between border-b border-[#003734] pb-2.5">
                 <span className="text-xs text-[#707777] font-mono">Status da Conta:</span>
-                <span className="px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 font-mono text-xs font-semibold">
+                <span className="px-2.5 py-0.5 rounded bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 font-mono text-xs font-semibold flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
                   ATIVO
                 </span>
               </div>

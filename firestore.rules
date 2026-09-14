@@ -4,61 +4,111 @@ service cloud.firestore {
     function isAuthenticated() {
       return request.auth != null;
     }
+
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
+
     function isAdmin() {
       return isAuthenticated() && (
         request.auth.token.email != null &&
+        request.auth.token.email_verified == true &&
         request.auth.token.email.lower() == 'wrbatata6@gmail.com'
       );
     }
 
+    // 1. Coleção de Usuários - Política Estrita de Whitelist (Blindagem Contra Fraudes)
+    // Clientes comuns NÃO têm permissão para alterar plano, validUntil ou créditos diretamente pelo navegador.
+    // Qualquer alteração de validade, planos e cupons deve ser realizada pelo Servidor (Firebase Admin SDK).
     match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow write: if isOwner(userId) || isAdmin();
+      allow read: if isOwner(userId) || isAdmin();
+      
+      // Criação inicial de conta permitida apenas com status 'trial' e sem privilégios administrativos
+      allow create: if isOwner(userId) && (
+        !('role' in request.resource.data) || request.resource.data.role != 'admin'
+      ) && (
+        !('isAdmin' in request.resource.data) || request.resource.data.isAdmin != true
+      ) && (
+        !('plan' in request.resource.data) || request.resource.data.plan in ['trial', 'free']
+      );
+
+      // Atualização por usuário comum restrita ESTRITAMENTE a foto, nome de exibição e último login.
+      // Modificações em plano, status, validade (validUntil), permissões ou bloqueios são bloqueadas no banco.
+      allow update: if isAdmin() || (
+        isOwner(userId) && 
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'displayName',
+          'photoURL',
+          'lastLoginAt'
+        ])
+      );
+
+      allow delete: if isAdmin();
     }
 
+    // 2. Coleção de Consultas - Isolamento e Auditoria
     match /consultas/{consultaId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update, delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
     }
 
     match /users/{userId}/consultas/{consultaId} {
-      allow read, write: if isOwner(userId) || isAdmin();
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // 3. Pagamentos - Imutabilidade Total pelo Frontend
+    // Usuários comuns podem apenas consultar seus recibos; inserção e aprovação são exclusivas do Servidor
+    match /payments/{paymentId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create, update, delete: if isAdmin();
     }
 
     match /users/{userId}/payments/{paymentId} {
-      allow read, write: if isOwner(userId) || isAdmin();
+      allow read: if isOwner(userId) || isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
-    match /payments/{paymentId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
-    }
-
+    // 4. Afiliados / Revenda (Referrals)
     match /referrals/{referralId} {
-      allow read, write: if isAuthenticated();
+      allow read: if isAdmin() || (isAuthenticated() && (
+        resource.data.resellerId == request.auth.uid || resource.data.userId == request.auth.uid
+      ));
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
     }
 
     match /users/{userId}/referrals/{referralId} {
-      allow read, write: if isAuthenticated();
+      allow read, write: if isOwner(userId) || isAdmin();
     }
 
+    // 5. Saques de Comissão (Withdrawals) - Solicitação 'pending', atualização exclusiva de admin
     match /withdrawals/{withdrawalId} {
-      allow read, write: if isAuthenticated();
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated() && 
+        request.resource.data.userId == request.auth.uid && 
+        request.resource.data.status == 'pending';
+      allow update, delete: if isAdmin();
     }
 
     match /users/{userId}/withdrawals/{withdrawalId} {
-      allow read, write: if isAuthenticated();
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && 
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.status == 'pending';
+      allow update, delete: if isAdmin();
     }
 
+    // 6. Cupons Promocionais - Blindados no Servidor
+    // Leitura permitida para checagem, mas queima e validação de crédito são realizadas via rotas seguras de API
     match /coupons/{couponId} {
-      allow read, write: if isAuthenticated();
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
     }
 
+    // 7. Notificações e Campanhas WebPush
     match /notifications/{notificationId} {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
@@ -66,13 +116,15 @@ service cloud.firestore {
 
     match /users/{userId}/notifications/{notificationId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow write: if isAdmin() || isOwner(userId);
+      allow create: if isAdmin();
+      allow update: if isAdmin() || (
+        isOwner(userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
+      );
+      allow delete: if isAdmin();
     }
 
     match /push_campaigns/{campaignId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      allow read, write: if isAdmin();
     }
   }
 }
-
