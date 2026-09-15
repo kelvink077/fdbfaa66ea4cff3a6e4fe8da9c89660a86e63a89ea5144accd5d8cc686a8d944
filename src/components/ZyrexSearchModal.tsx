@@ -275,14 +275,14 @@ export const ZyrexSearchModal: React.FC<ZyrexSearchModalProps> = ({
                 </h2>
                 <span className="px-2.5 py-0.5 rounded-full bg-[#00d2ff]/20 text-[#79fbf5] border border-[#00d2ff]/50 font-mono text-[10px] font-bold tracking-wider flex items-center gap-1">
                   <Bot className="w-3 h-3" />
-                  KREX
+                  @ZyrexBuscasBot
                 </span>
                 <span className="px-2 py-0.5 rounded bg-[#012624] text-[#cbfffc] border border-[#003734] font-mono text-[9px]">
                   ROTA DEDICADA
                 </span>
               </div>
               <p className="text-xs text-[#9bb0af] font-mono mt-0.5">
-                Barramento integrado com encaminhamento direto para <strong className="text-[#79fbf5]">KREX</strong>
+                Barramento integrado com encaminhamento direto para <strong className="text-[#79fbf5]">@ZyrexBuscasBot</strong>
               </p>
             </div>
           </div>
@@ -747,7 +747,7 @@ export const ZyrexSearchModal: React.FC<ZyrexSearchModalProps> = ({
                       Nenhuma consulta KREX ativa no momento
                     </p>
                     <p className="text-xs max-w-sm text-[#456365]">
-                      Selecione um dos 22 módulos à esquerda, informe o dado do alvo e clique em <strong>Consultar KREX</strong>. As mensagens serão roteadas exclusivamente para <strong>KREX</strong>.
+                      Selecione um dos 22 módulos à esquerda, informe o dado do alvo e clique em <strong>Consultar KREX</strong>. As mensagens serão roteadas exclusivamente para <strong>@ZyrexBuscasBot</strong>.
                     </p>
                   </div>
                 )}

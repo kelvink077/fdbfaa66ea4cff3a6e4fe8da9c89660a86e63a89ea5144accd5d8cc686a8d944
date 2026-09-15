@@ -74,7 +74,10 @@ const TELEGRAM_PHONE_NUMBER = process.env.TELEGRAM_PHONE_NUMBER || '+55319812199
 const TELEGRAM_CHAT_ID_OLD = process.env.TELEGRAM_CHAT_ID || ''; // Seu bot normal configurado no Render
 const TELEGRAM_CHAT_ID_PRO = process.env.TELEGRAM_CHAT_ID_PRO || '@Hgliopk00bot'; // Rota via @username (Módulo Avançado)
 const TARGET_BOT_PRO_ID_NUM = process.env.TARGET_BOT_PRO_ID_NUM || '7565502829';   // ID numérico do bot PRO para leitura das respostas
-const TELEGRAM_CHAT_ID_KREX = process.env.TELEGRAM_CHAT_ID_KREX || process.env.TELEGRAM_CHAT_ID_ZYREX || (TELEGRAM_CHAT_ID_OLD && TELEGRAM_CHAT_ID_OLD !== 'KREX' ? TELEGRAM_CHAT_ID_OLD : '@SkynetBlackRobot'); // Rota exclusiva Buscas KREX
+const rawKrexTarget = process.env.TELEGRAM_CHAT_ID_KREX || process.env.TELEGRAM_CHAT_ID_ZYREX || '';
+const TELEGRAM_CHAT_ID_KREX = (rawKrexTarget && rawKrexTarget !== 'KREX' && rawKrexTarget !== '@SkynetBlackRobot' && rawKrexTarget !== 'SkynetBlackRobot')
+  ? rawKrexTarget
+  : '@ZyrexBuscasBot'; // Rota oficial exclusiva Buscas KREX / Zyrex (@ZyrexBuscasBot)
 const TELEGRAM_CHAT_ID_ZYREX = TELEGRAM_CHAT_ID_KREX;
 
 // =============================================================
@@ -83,7 +86,7 @@ const TELEGRAM_CHAT_ID_ZYREX = TELEGRAM_CHAT_ID_KREX;
 // =============================================================
 const authorizedBotIds = new Set<string>([
   '7565502829', // ID oficial do Bot PRO (@Hgliopk00bot)
-  '7912205816', // ID oficial do Bot KREX / Zyrex
+  '7912205816', // ID oficial do Bot KREX / Zyrex (@ZyrexBuscasBot)
   TARGET_BOT_PRO_ID_NUM,
   TELEGRAM_CHAT_ID_OLD.replace(/[^0-9]/g, ''),
   TELEGRAM_CHAT_ID_KREX.replace(/[^0-9]/g, ''),
@@ -94,6 +97,7 @@ const authorizedBotUsernames = new Set<string>([
   'hgliopk00bot',
   'krex',
   'zyrexbuscasbot',
+  'zyrex',
   'skynetblackrobot',
   'skynet',
   TELEGRAM_CHAT_ID_PRO.replace('@', '').toLowerCase(),
@@ -758,6 +762,7 @@ async function resolveTelegramPeer(client: TelegramClient, targetId: any) {
     clean.toLowerCase() === 'krex' ||
     clean === '@ZyrexBuscasBot' ||
     clean === 'ZyrexBuscasBot' ||
+    clean.toLowerCase() === 'zyrexbuscasbot' ||
     clean === '@SkynetBlackRobot' ||
     clean === 'SkynetBlackRobot' ||
     clean.toLowerCase().includes('skynet') ||
@@ -768,13 +773,20 @@ async function resolveTelegramPeer(client: TelegramClient, targetId: any) {
     if (cachedZyrexBotPeer) {
       return cachedZyrexBotPeer;
     }
-    const candidates = ['SkynetBlackRobot', 'ZyrexBuscasBot', 'KREX'];
+    // 1. Resolve prioritariamente @ZyrexBuscasBot via RPC nos servidores do Telegram
+    const candidates = [
+      'ZyrexBuscasBot',
+      clean.replace('@', ''),
+      'zyrexbuscasbot',
+      'SkynetBlackRobot',
+      'KREX'
+    ].filter(Boolean);
     for (const cand of candidates) {
       try {
         const res: any = await client.invoke(new Api.contacts.ResolveUsername({ username: cand }));
         if (res && res.users && res.users.length > 0) {
           const u = res.users[0];
-          console.log(`[GramJS] ${cand} resolvido via RPC nos servidores do Telegram. User ID: ${u.id}`);
+          console.log(`[GramJS] ${cand} (@${u.username || cand}) resolvido via RPC nos servidores do Telegram. User ID: ${u.id}`);
           registerAuthorizedBot(u.id, u.username);
           cachedZyrexBotPeer = new Api.InputPeerUser({
             userId: u.id,
@@ -786,7 +798,7 @@ async function resolveTelegramPeer(client: TelegramClient, targetId: any) {
         console.warn(`[GramJS] ResolveUsername RPC ${cand}:`, rpcErr?.message);
       }
     }
-    for (const cand of ['@SkynetBlackRobot', 'SkynetBlackRobot', '@ZyrexBuscasBot', 'KREX', '@KREX']) {
+    for (const cand of ['@ZyrexBuscasBot', 'ZyrexBuscasBot', '@SkynetBlackRobot', 'SkynetBlackRobot', 'KREX', '@KREX']) {
       try {
         const entity: any = await client.getEntity(cand);
         if (entity) {
@@ -802,29 +814,26 @@ async function resolveTelegramPeer(client: TelegramClient, targetId: any) {
         const entity: any = d.entity;
         const uName = (entity?.username || '').toLowerCase();
         const title = (entity?.title || '').toLowerCase();
-        const cleanOld = TELEGRAM_CHAT_ID_OLD.replace('@', '').replace(/^-100/, '').replace(/^-/, '').toLowerCase();
         if (
           entity && (
-            uName.includes('skynet') ||
-            uName.includes('krex') ||
             uName.includes('zyrex') ||
-            title.includes('skynet') ||
-            title.includes('olho de deus') ||
-            title.includes('krex') ||
+            uName.includes('krex') ||
+            uName.includes('skynet') ||
             title.includes('zyrex') ||
-            (cleanOld && (String(entity.id).includes(cleanOld) || uName.includes(cleanOld)))
+            title.includes('krex') ||
+            title.includes('skynet') ||
+            title.includes('olho de deus')
           )
         ) {
+          console.log(`[GramJS] Encontrado bot KREX/Zyrex nos diálogos: @${uName} (ID: ${entity.id})`);
           registerAuthorizedBot(entity.id, entity.username);
           cachedZyrexBotPeer = d.inputEntity || entity;
           return cachedZyrexBotPeer;
         }
       }
     } catch {}
-    if (TELEGRAM_CHAT_ID_OLD && TELEGRAM_CHAT_ID_OLD !== 'KREX') {
-      return await resolveTelegramPeer(client, TELEGRAM_CHAT_ID_OLD);
-    }
-    return '@SkynetBlackRobot';
+
+    return '@ZyrexBuscasBot';
   }
 
   // Resolução para o Bot Padrão (Old Bot)
@@ -1607,15 +1616,15 @@ async function handleUserbotIncomingMessage(event: any) {
 
     const oldBotCleanId = TELEGRAM_CHAT_ID_OLD.replace('@', '').toLowerCase(); 
     const isFromOldBot = Boolean(
-      (oldBotCleanId && (senderId.toLowerCase().includes(oldBotCleanId) || chatId.toLowerCase().includes(oldBotCleanId) || peerUserId.toLowerCase().includes(oldBotCleanId) || senderUsername.includes(oldBotCleanId))) ||
-      senderUsername.includes('skynet')
+      oldBotCleanId && (senderId.toLowerCase().includes(oldBotCleanId) || chatId.toLowerCase().includes(oldBotCleanId) || peerUserId.toLowerCase().includes(oldBotCleanId) || senderUsername.includes(oldBotCleanId))
     );
     
     const isFromProBot = [TARGET_BOT_PRO_ID_NUM, 'hgliopk00bot', '7565502829'].some(id => 
       senderId.toLowerCase().includes(id) || chatId.toLowerCase().includes(id) || peerUserId.toLowerCase().includes(id) || senderUsername.includes(id)
     );
 
-    const isFromZyrexBot = ['krex', 'zyrexbuscasbot', '7912205816', 'skynetblackrobot', 'skynet'].some(id =>
+    const krexTargetClean = TELEGRAM_CHAT_ID_KREX.replace('@', '').toLowerCase();
+    const isFromZyrexBot = ['krex', 'zyrexbuscasbot', 'zyrex', '7912205816', 'skynetblackrobot', 'skynet', krexTargetClean].filter(Boolean).some(id =>
       senderId.toLowerCase().includes(id) || chatId.toLowerCase().includes(id) || peerUserId.toLowerCase().includes(id) || senderUsername.includes(id)
     ) || incomingText.toLowerCase().includes('skynet') || incomingText.toLowerCase().includes('krex') || incomingText.toLowerCase().includes('zyrex') || /by:\s*@/i.test(incomingText);
 
@@ -2021,7 +2030,9 @@ async function handleUserbotIncomingMessage(event: any) {
 
       if (txtBtn && userbotClient) {
         console.log(`[GramJS] 💾 Detectado botão "${txtBtn.text}" na mensagem ${messageId}. Disparando clique callback...`);
-        const targetChat = q.isPro ? TELEGRAM_CHAT_ID_PRO : (TELEGRAM_CHAT_ID_OLD || TELEGRAM_CHAT_ID_PRO);
+        const targetChat = (q.isZyrex || (q as any).isKrex) 
+          ? TELEGRAM_CHAT_ID_KREX 
+          : (q.isPro ? TELEGRAM_CHAT_ID_PRO : (TELEGRAM_CHAT_ID_OLD || TELEGRAM_CHAT_ID_PRO));
         await triggerTelegramButtonCallback(userbotClient, message, txtBtn, targetChat);
 
         // Espera inteligente de até 9.5 segundos para receber e importar o arquivo TXT enviado pelo Telegram
@@ -2280,26 +2291,29 @@ async function initUserbot(customSession?: string) {
         console.warn('[GramJS] Aviso ao pré-resolver @Hgliopk00bot:', pErr?.message);
       }
 
-      // Pré-aquece a resolução do bot KREX diretamente no servidor do Telegram
+      // Pré-aquece a resolução do bot KREX/Zyrex (@ZyrexBuscasBot) diretamente no servidor do Telegram
       try {
-        console.log('[GramJS] Pré-resolvendo KREX via RPC nos servidores do Telegram...');
-        const krexRes: any = await client.invoke(new Api.contacts.ResolveUsername({ username: 'KREX' }));
-        if (krexRes?.users?.[0]) {
-          const ku = krexRes.users[0];
-          console.log(`[GramJS] KREX pré-resolvido com sucesso! ID: ${ku.id}`);
+        console.log('[GramJS] Pré-resolvendo @ZyrexBuscasBot via RPC nos servidores do Telegram...');
+        const zyrexRes: any = await client.invoke(new Api.contacts.ResolveUsername({ username: 'ZyrexBuscasBot' }));
+        if (zyrexRes?.users?.[0]) {
+          const zu = zyrexRes.users[0];
+          console.log(`[GramJS] @ZyrexBuscasBot pré-resolvido com sucesso! ID: ${zu.id} (@${zu.username || 'ZyrexBuscasBot'})`);
+          registerAuthorizedBot(zu.id, zu.username);
           cachedZyrexBotPeer = new Api.InputPeerUser({
-            userId: ku.id,
-            accessHash: ku.accessHash,
+            userId: zu.id,
+            accessHash: zu.accessHash,
           });
         }
-      } catch (kErr: any) {
+      } catch (zErr: any) {
+        console.warn('[GramJS] Aviso ao pré-resolver @ZyrexBuscasBot:', zErr?.message);
         try {
-          const fallbackRes: any = await client.invoke(new Api.contacts.ResolveUsername({ username: 'ZyrexBuscasBot' }));
+          const fallbackRes: any = await client.invoke(new Api.contacts.ResolveUsername({ username: 'SkynetBlackRobot' }));
           if (fallbackRes?.users?.[0]) {
-            const zu = fallbackRes.users[0];
+            const ku = fallbackRes.users[0];
+            registerAuthorizedBot(ku.id, ku.username);
             cachedZyrexBotPeer = new Api.InputPeerUser({
-              userId: zu.id,
-              accessHash: zu.accessHash,
+              userId: ku.id,
+              accessHash: ku.accessHash,
             });
           }
         } catch {}
@@ -2398,6 +2412,24 @@ async function dispatchToTelegram(record: ConsultationState & { isPro?: boolean;
       return { sent: true, messageId: sentMsg.id, commandText, targetChatId, isPro, isZyrex, isKrex: isZyrex };
     } catch (err: any) { 
       console.error(`[GramJS] Falha ao despachar para ${targetChatId}:`, err?.message || err);
+      // Tentativa de recuperação de emergência para KREX / Zyrex (@ZyrexBuscasBot)
+      if (isZyrex) {
+        try {
+          console.log('[GramJS] Tentando fallback para @ZyrexBuscasBot via ResolveUsername RPC...');
+          const zRes: any = await userbotClient.invoke(new Api.contacts.ResolveUsername({ username: 'ZyrexBuscasBot' }));
+          if (zRes?.users?.[0]) {
+            const zu = zRes.users[0];
+            registerAuthorizedBot(zu.id, zu.username);
+            const zPeer = new Api.InputPeerUser({ userId: zu.id, accessHash: zu.accessHash });
+            cachedZyrexBotPeer = zPeer;
+            const retryMsg: any = await userbotClient.sendMessage(zPeer, { message: commandText });
+            console.log(`[GramJS] Sucesso no fallback direto para @ZyrexBuscasBot (ID: ${zu.id}). Mensagem ID: ${retryMsg.id}`);
+            return { sent: true, messageId: retryMsg.id, commandText, targetChatId: '@ZyrexBuscasBot', isPro: false, isZyrex: true, isKrex: true };
+          }
+        } catch (zErr: any) {
+          console.error('[GramJS] Falha também no fallback para @ZyrexBuscasBot:', zErr?.message || zErr);
+        }
+      }
       // Tentativa de recuperação de emergência para o bot PRO via ID numérico direto
       if (isPro && !isZyrex) {
         try {
@@ -3870,7 +3902,14 @@ app.post('/api/query/request', queryLimiter, requireAuth, async (req, res) => {
     user.plan === 'biweekly' ||
     user.plan === 'weekly'
   );
-  const hasKrexPrivileges = Boolean(user.isAdmin || user.plan === 'lifetime');
+  const hasKrexPrivileges = Boolean(
+    user.isAdmin || 
+    user.plan === 'lifetime' || 
+    user.plan === 'monthly' || 
+    user.plan === 'biweekly' ||
+    user.plan === 'weekly' ||
+    user.plan === 'trial'
+  );
 
   const requestedKrex = Boolean(
     moduleType === 'cep' ||
