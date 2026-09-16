@@ -814,7 +814,22 @@ export default function App() {
         });
       }
     } catch (err: any) {
-      console.error('[Firebase] Erro ao autenticar via Google:', err);
+      // Se o usuário simplesmente fechou a janela de autenticação do Google ou a requisição da janela foi cancelada/interrompida
+      const isUserClosedOrCancelled = 
+        err?.code === 'auth/popup-closed-by-user' || 
+        err?.code === 'auth/cancelled-popup-request' ||
+        err?.code === 'auth/user-cancelled' ||
+        err?.code === 'auth/network-request-failed' ||
+        err?.message?.includes('popup-closed-by-user') ||
+        err?.message?.includes('cancelled-popup-request') ||
+        err?.message?.includes('network-request-failed');
+
+      if (isUserClosedOrCancelled) {
+        console.warn('[Firebase Auth] Janela de login fechada ou cancelada pelo usuário (sem erro).');
+        return;
+      }
+
+      console.warn('[Firebase] Erro ao autenticar via Google:', err?.code || err?.message || err);
       const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'dapper-seahorse-f49b35.netlify.app';
       setAuthError({
         code: err?.code || 'auth/unauthorized-domain',

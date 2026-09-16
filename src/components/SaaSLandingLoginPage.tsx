@@ -259,7 +259,10 @@ export const SaaSLandingLoginPage: React.FC<SaaSLandingLoginPageProps> = ({
           </div>
 
           {/* Diagnostic Banner if Google Auth popup closes */}
-          {authError && (
+          {authError && 
+           authError.code !== 'auth/popup-closed-by-user' && 
+           authError.code !== 'auth/cancelled-popup-request' && 
+           authError.code !== 'auth/user-cancelled' && (
             <div className="w-full max-w-2xl mx-auto mt-8 p-4 rounded-[12px] bg-amber-950/40 border border-amber-500/50 text-left space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-1.5 text-xs font-mono font-bold text-amber-300">

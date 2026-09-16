@@ -38,6 +38,16 @@ export const AuthErrorModal: React.FC<AuthErrorModalProps> = ({
 
   if (!isOpen) return null;
 
+  // Se o erro for apenas o fechamento intencional da janela pelo usuário ou cancelamento de conexão
+  if (
+    errorDetails?.code === 'auth/popup-closed-by-user' ||
+    errorDetails?.code === 'auth/cancelled-popup-request' ||
+    errorDetails?.code === 'auth/user-cancelled' ||
+    errorDetails?.code === 'auth/network-request-failed'
+  ) {
+    return null;
+  }
+
   const currentDomain = errorDetails?.domain || 
     (typeof window !== 'undefined' ? window.location.hostname : 'dapper-seahorse-f49b35.netlify.app');
 
@@ -63,8 +73,7 @@ export const AuthErrorModal: React.FC<AuthErrorModalProps> = ({
 
   const isUnauthorizedDomain = 
     errorDetails?.code === 'auth/unauthorized-domain' || 
-    errorDetails?.message?.includes('unauthorized-domain') ||
-    errorDetails?.code === 'auth/popup-closed-by-user';
+    errorDetails?.message?.includes('unauthorized-domain');
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-[#011413]/90 backdrop-blur-md overflow-y-auto">

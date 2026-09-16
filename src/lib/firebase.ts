@@ -517,11 +517,24 @@ export async function loginWithGoogle(): Promise<{ user: User; profile: UserProf
 
     return { user, profile };
   } catch (err: any) {
-    const currentDomain = typeof window !== 'undefined' ? window.location.hostname : '';
-    console.error('[Firebase Auth] Erro ao autenticar via Google:', err?.code, err?.message);
+    const isDismissedOrNetworkInterrupt = 
+      err?.code === 'auth/popup-closed-by-user' || 
+      err?.code === 'auth/cancelled-popup-request' ||
+      err?.code === 'auth/user-cancelled' ||
+      err?.code === 'auth/network-request-failed' ||
+      err?.message?.includes('popup-closed-by-user') ||
+      err?.message?.includes('cancelled-popup-request') ||
+      err?.message?.includes('network-request-failed');
+
+    if (isDismissedOrNetworkInterrupt) {
+      console.warn('[Firebase Auth] Fluxo de autenticação fechado ou interrompido:', err?.code || 'popup-closed');
+    } else {
+      console.warn('[Firebase Auth] Erro ao autenticar via Google:', err?.code, err?.message);
+    }
     
+    const currentDomain = typeof window !== 'undefined' ? window.location.hostname : '';
     err.detectedDomain = currentDomain;
-    if (err.code === 'auth/unauthorized-domain' || err.message?.includes('unauthorized-domain')) {
+    if (err?.code === 'auth/unauthorized-domain' || err?.message?.includes('unauthorized-domain')) {
       err.friendlyMessage = `O domínio "${currentDomain}" ainda não está na lista de Domínios Autorizados no Firebase Console.`;
     }
     throw err;
