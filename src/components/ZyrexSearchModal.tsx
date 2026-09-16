@@ -274,15 +274,15 @@ export const ZyrexSearchModal: React.FC<ZyrexSearchModalProps> = ({
                   BUSCAS KREX
                 </h2>
                 <span className="px-2.5 py-0.5 rounded-full bg-[#00d2ff]/20 text-[#79fbf5] border border-[#00d2ff]/50 font-mono text-[10px] font-bold tracking-wider flex items-center gap-1">
-                  <Bot className="w-3 h-3" />
-                  @ZyrexBuscasBot
+                  <Zap className="w-3 h-3 text-[#00d2ff]" />
+                  MOTOR ULTRA RÁPIDO
                 </span>
                 <span className="px-2 py-0.5 rounded bg-[#012624] text-[#cbfffc] border border-[#003734] font-mono text-[9px]">
                   ROTA DEDICADA
                 </span>
               </div>
               <p className="text-xs text-[#9bb0af] font-mono mt-0.5">
-                Barramento integrado com encaminhamento direto para <strong className="text-[#79fbf5]">@ZyrexBuscasBot</strong>
+                Barramento de alta velocidade com indexação cadastral profunda e dossiê estruturado
               </p>
             </div>
           </div>
@@ -661,7 +661,7 @@ export const ZyrexSearchModal: React.FC<ZyrexSearchModalProps> = ({
                               O servidor retornou erro, por favor tente novamente em 10 segundos
                             </h4>
                             <p className="text-xs text-[#ffc2c2] mt-1 font-mono leading-relaxed">
-                              O robô KREX reportou instabilidade ou erro interno. Pressione o botão abaixo para enviar o comando <code className="text-[#ffd166] bg-[#000000]/60 px-1.5 py-0.5 rounded">/start</code>, restaurar a sessão e continuar a pesquisa automaticamente.
+                              O motor KREX reportou instabilidade ou erro interno. Pressione o botão abaixo para reiniciar o barramento e prosseguir com a pesquisa automaticamente.
                             </p>
                           </div>
                         </div>
@@ -742,12 +742,12 @@ export const ZyrexSearchModal: React.FC<ZyrexSearchModalProps> = ({
                   )
                 ) : (
                   <div className="h-full flex flex-col items-center justify-center py-12 text-center text-[#707777] space-y-2">
-                    <Bot className="w-10 h-10 text-[#003734]" />
+                    <Search className="w-10 h-10 text-[#003734]" />
                     <p className="text-sm font-['DM_Sans',sans-serif] text-[#bbc7c6]">
                       Nenhuma consulta KREX ativa no momento
                     </p>
                     <p className="text-xs max-w-sm text-[#456365]">
-                      Selecione um dos 22 módulos à esquerda, informe o dado do alvo e clique em <strong>Consultar KREX</strong>. As mensagens serão roteadas exclusivamente para <strong>@ZyrexBuscasBot</strong>.
+                      Selecione um dos 22 módulos à esquerda, informe o dado do alvo e clique em <strong>Consultar KREX</strong> para obter os dados cadastrais estruturados em tempo real.
                     </p>
                   </div>
                 )}

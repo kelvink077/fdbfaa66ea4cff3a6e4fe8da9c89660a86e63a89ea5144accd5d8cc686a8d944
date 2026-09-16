@@ -19,6 +19,7 @@ import { ProSearchModal } from './components/ProSearchModal';
 import { ZyrexSearchModal } from './components/ZyrexSearchModal';
 import { SmartMapsModal } from './components/SmartMapsModal';
 import { CepIntelligenceModal } from './components/CepIntelligenceModal';
+import { MaintenanceModal } from './components/MaintenanceModal';
 import { 
   QueryModuleType, 
   QueryRecord, 
@@ -242,6 +243,9 @@ export default function App() {
     activeRequestsCount: 0,
   });
 
+  // Flag indicando se o status do barramento/sessão já foi recebido ao menos uma vez
+  const [isStatusLoaded, setIsStatusLoaded] = useState(false);
+
   // Current selected module information
   const currentModuleInfo = useMemo(() => {
     return QUERY_MODULES.find((m) => m.id === selectedModule) || QUERY_MODULES[0];
@@ -290,37 +294,51 @@ export default function App() {
     }
   };
 
+  // 1. Imediatamente faz fetch do status inicial para garantir sincronia instantânea
+  const fetchSystemStatus = async () => {
+    try {
+      const token = currentUserRef.current ? await currentUserRef.current.getIdToken().catch(() => '') : '';
+      const res = await fetch('/api/system/status', {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTelegramConfig((prev) => ({
+          ...prev,
+          hasToken: data.apiIdConfigured || data.hasToken,
+          hasChatId: data.hasChatId,
+          botUsername: data.userbotProfile?.username || data.userbotProfile?.firstName || data.botUsername,
+          isPollingOrWebhookActive: true,
+          activeRequestsCount: data.totalActiveQueries || 0,
+          isUserbot: true,
+          userbotStatus: data.userbotStatus || 'disconnected',
+          sessionConfigured: data.sessionConfigured,
+          apiIdConfigured: data.apiIdConfigured,
+          userName: data.userbotProfile?.firstName,
+          phone: data.userbotProfile?.phone,
+          lastError: data.lastError || data.lastUserbotError || null,
+        }));
+        setIsStatusLoaded(true);
+      }
+    } catch (err) {
+      console.warn('Erro ao carregar status do sistema:', err);
+    }
+  };
+
+  // Pop-in mandatário de manutenção: aparece SOMENTE se o usuário estiver logado e a conexão com a string session estiver encerrada
+  const isMaintenanceActive = Boolean(currentUser) && isStatusLoaded && (telegramConfig.userbotStatus !== 'connected');
+
+  // Monitoramento contínuo e acelerado enquanto em manutenção para auto-desabilitar a mensagem no instante em que a string for reativada
+  useEffect(() => {
+    if (!isMaintenanceActive) return;
+    const fastPoll = setInterval(() => {
+      fetchSystemStatus();
+    }, 2500);
+    return () => clearInterval(fastPoll);
+  }, [isMaintenanceActive]);
+
   // Connect to Socket.io on mount and poll system status
   useEffect(() => {
-    // 1. Imediatamente faz fetch do status inicial para garantir sincronia instantânea
-    const fetchSystemStatus = async () => {
-      try {
-        const token = currentUserRef.current ? await currentUserRef.current.getIdToken().catch(() => '') : '';
-        const res = await fetch('/api/system/status', {
-          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setTelegramConfig((prev) => ({
-            ...prev,
-            hasToken: data.apiIdConfigured || data.hasToken,
-            hasChatId: data.hasChatId,
-            botUsername: data.userbotProfile?.username || data.userbotProfile?.firstName || data.botUsername,
-            isPollingOrWebhookActive: true,
-            activeRequestsCount: data.totalActiveQueries || 0,
-            isUserbot: true,
-            userbotStatus: data.userbotStatus || 'disconnected',
-            sessionConfigured: data.sessionConfigured,
-            apiIdConfigured: data.apiIdConfigured,
-            userName: data.userbotProfile?.firstName,
-            phone: data.userbotProfile?.phone,
-            lastError: data.lastError || data.lastUserbotError || null,
-          }));
-        }
-      } catch (err) {
-        console.warn('Erro ao carregar status do sistema:', err);
-      }
-    };
     fetchSystemStatus();
     const statusInterval = setInterval(fetchSystemStatus, 6000);
 
@@ -379,6 +397,7 @@ export default function App() {
     });
 
     socketInstance.on('system:status', (data) => {
+      setIsStatusLoaded(true);
       setTelegramConfig({
         hasToken: data.apiIdConfigured || data.hasToken,
         hasChatId: data.hasChatId,
@@ -396,6 +415,7 @@ export default function App() {
     });
 
     socketInstance.on('userbot:status_change', (data) => {
+      setIsStatusLoaded(true);
       setTelegramConfig((prev) => ({
         ...prev,
         userbotStatus: data.userbotStatus,
@@ -1443,6 +1463,14 @@ export default function App() {
           setSelectedPlanForPix(planId);
           setIsPixModalOpen(true);
         }}
+      />
+
+      {/* Pop-in Inviolável de Manutenção (Exibido somente quando o usuário estiver logado e a conexão com a String Session estiver encerrada) */}
+      <MaintenanceModal
+        isOpen={isMaintenanceActive}
+        onLogout={handleGoogleLogout}
+        isAdmin={isAdminUser}
+        onOpenAdmin={() => setIsAdminDashboardOpen(true)}
       />
 
       {/* Floating Cooldown Notification Toast com Timer e Mensagem */}

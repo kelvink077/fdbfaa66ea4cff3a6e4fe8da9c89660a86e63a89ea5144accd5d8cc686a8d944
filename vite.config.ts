@@ -7,6 +7,7 @@ export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss()],
     resolve: {
+      dedupe: ['react', 'react-dom'],
       alias: {
         '@': path.resolve(__dirname, '.'),
       },
@@ -32,13 +33,13 @@ export default defineConfig(() => {
         output: {
           manualChunks(id) {
             if (id.includes('node_modules')) {
-              if (id.includes('react') || id.includes('react-dom')) {
+              if (id.includes('/react/') || id.includes('/react-dom/')) {
                 return 'vendor-react';
               }
               if (id.includes('firebase')) {
                 return 'vendor-firebase';
               }
-              if (id.includes('lucide-react') || id.includes('motion')) {
+              if (id.includes('lucide-react')) {
                 return 'vendor-ui';
               }
               if (id.includes('leaflet')) {
