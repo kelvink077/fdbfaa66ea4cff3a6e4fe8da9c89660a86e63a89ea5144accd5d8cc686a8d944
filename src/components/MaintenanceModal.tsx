@@ -48,8 +48,8 @@ export const MaintenanceModal: React.FC<MaintenanceModalProps> = ({
         </h2>
 
         {/* Official User-Requested Maintenance Notice */}
-        <div className="p-4 sm:p-5 rounded-xl bg-[#011716] border border-[#004d46] text-[#e0f2f1] text-sm sm:text-base leading-relaxed mb-6 font-medium shadow-inner">
-          Lamentamos o transtorno no momento nosso sistema esta passando por manutenção agradecemos sua compreensão retornaremos em breve.
+        <div className="p-4 sm:p-5 rounded-xl bg-[#011716] border border-[#004d46] text-[#e0f2f1] text-sm sm:text-base leading-relaxed mb-6 font-semibold shadow-inner">
+          No momento estamos em manutenção, por favor aguarde.
         </div>
 
         {/* Action Button: Sair (Sign out) */}

@@ -20,6 +20,8 @@ import { ZyrexSearchModal } from './components/ZyrexSearchModal';
 import { SmartMapsModal } from './components/SmartMapsModal';
 import { CepIntelligenceModal } from './components/CepIntelligenceModal';
 import { MaintenanceModal } from './components/MaintenanceModal';
+import { RainBranchesBackground } from './components/RainBranchesBackground';
+import { FullScreenLightningStrike } from './components/FullScreenLightningStrike';
 import { 
   QueryModuleType, 
   QueryRecord, 
@@ -30,7 +32,7 @@ import { OptionsSelectionCard } from './components/OptionsSelectionCard';
 import { MobileModuleBar } from './components/MobileModuleBar';
 import { MobileDrawer } from './components/MobileDrawer';
 import { QUERY_MODULES } from './utils/modulesData';
-import { parseIntelligenceResponse, SAMPLE_RESPONSES, getSampleResponseForQuery } from './utils/intelligenceTemplates';
+import { parseIntelligenceResponse } from './utils/intelligenceTemplates';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { 
   loginWithGoogle, 
@@ -126,6 +128,30 @@ export default function App() {
   const [currentActiveRecord, setCurrentActiveRecord] = useState<QueryRecord | null>(null);
   const [pendingQueries, setPendingQueries] = useState<QueryRecord[]>([]);
   const [history, setHistory] = useState<QueryRecord[]>([]);
+
+  // Raio muito forte cruzando a tela inteira quando o resultado da busca é exibido
+  const [lightningStrikeKey, setLightningStrikeKey] = useState<number>(0);
+  const prevActiveRecordIdRef = useRef<string | null>(null);
+  const prevLoadingRef = useRef<boolean>(false);
+
+  const triggerMegaLightning = () => {
+    setLightningStrikeKey((k) => k + 1);
+  };
+
+  // Dispara o raio em tela cheia automaticamente quando o resultado da busca é exibido
+  useEffect(() => {
+    if (currentActiveRecord && !isLoading) {
+      if (prevLoadingRef.current && !isLoading) {
+        // Busca acabou de concluir o carregamento e o resultado foi exibido
+        triggerMegaLightning();
+      } else if (currentActiveRecord.id !== prevActiveRecordIdRef.current) {
+        // Novo resultado selecionado / exibido
+        triggerMegaLightning();
+      }
+    }
+    prevLoadingRef.current = isLoading;
+    prevActiveRecordIdRef.current = currentActiveRecord ? currentActiveRecord.id : null;
+  }, [currentActiveRecord, isLoading]);
   
   // Firebase Auth State: sistema restrito a usuários autenticados
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
@@ -325,8 +351,18 @@ export default function App() {
     }
   };
 
-  // Pop-in mandatário de manutenção: aparece SOMENTE se o usuário estiver logado e a conexão com a string session estiver encerrada
-  const isMaintenanceActive = Boolean(currentUser) && isStatusLoaded && (telegramConfig.userbotStatus !== 'connected');
+  // Pop-in mandatário de manutenção: ativo quando o status do sistema for carregado e a string session não estiver conectada
+  const isMaintenanceActive = isStatusLoaded && (telegramConfig.userbotStatus !== 'connected');
+
+  // Regra obrigatória: se o cliente já estiver logado quando a string for desconectada, o cliente deve ser desconectado imediatamente
+  useEffect(() => {
+    if (isStatusLoaded && telegramConfig.userbotStatus !== 'connected') {
+      if (currentUser && !isAdminUser) {
+        console.warn('[Manutenção] String Session desconectada. Desconectando cliente logado automaticamente.');
+        handleGoogleLogout();
+      }
+    }
+  }, [telegramConfig.userbotStatus, isStatusLoaded, currentUser, isAdminUser]);
 
   // Monitoramento contínuo e acelerado enquanto em manutenção para auto-desabilitar a mensagem no instante em que a string for reativada
   useEffect(() => {
@@ -494,6 +530,19 @@ export default function App() {
         data.rawResponse?.trim() === 'Consultando...' ||
         data.rawResponse?.trim() === '🔎 Consultando...';
 
+      const isMaintenanceMsg =
+        Boolean((data as any).isMaintenance) ||
+        data.rawResponse?.includes('manutenção') ||
+        data.errorMessage?.includes('manutenção');
+
+      if (isMaintenanceMsg) {
+        setTelegramConfig((prev) => ({
+          ...prev,
+          userbotStatus: 'disconnected',
+          lastError: 'No momento estamos em manutenção, por favor aguarde.',
+        }));
+      }
+
       const parsed = parseIntelligenceResponse(data.rawResponse || '', data.moduleType, data.queryParam);
       const isZyrex = Boolean(
         data.isZyrex || 
@@ -589,7 +638,7 @@ export default function App() {
       );
     });
 
-    // When any query is created (for queue and auto-response)
+    // When any query is created (for queue tracking)
     socketInstance.on('telegram:query_created', (data: any) => {
       setPendingQueries((prev) => {
         if (prev.some((p) => p.id === data.id)) return prev;
@@ -597,19 +646,6 @@ export default function App() {
       });
 
       currentPendingIdRef.current = data.id;
-
-      // Auto-responder rápido para testes interativos se habilitado
-      if (autoSimulate) {
-        if (autoSimulateTimerRef.current) clearTimeout(autoSimulateTimerRef.current);
-        setLoadingStepText('Solicitação despachada! Processando retorno em 1.8s...');
-        autoSimulateTimerRef.current = setTimeout(() => {
-          socketInstance.emit('telegram:simulate_reply', {
-            requestId: data.id,
-            responseText: getSampleResponseForQuery(data.moduleType as QueryModuleType, data.queryParam),
-            operatorName: 'Motor Shazam Buscas',
-          });
-        }, 1800);
-      }
     });
 
     // When completed globally
@@ -680,6 +716,13 @@ export default function App() {
       setIsLoading(false);
       if (autoSimulateTimerRef.current) clearTimeout(autoSimulateTimerRef.current);
       console.warn('Aviso na consulta:', err?.error || err);
+      if (err?.isMaintenance || err?.requiresReconnect || err?.userbotStatus === 'disconnected' || String(err?.error || '').includes('manutenção')) {
+        setTelegramConfig((prev) => ({
+          ...prev,
+          userbotStatus: 'disconnected',
+          lastError: 'No momento estamos em manutenção, por favor aguarde.',
+        }));
+      }
     });
 
     // Rate limit cooldown listener (15 segundos obrigatórios)
@@ -697,7 +740,7 @@ export default function App() {
       if (autoSimulateTimerRef.current) clearTimeout(autoSimulateTimerRef.current);
       socketInstance.disconnect();
     };
-  }, [autoSimulate]);
+  }, []);
 
   // Fetch initial history if available
   useEffect(() => {
@@ -801,6 +844,17 @@ export default function App() {
     setAuthError(null);
     try {
       const { user, profile } = await loginWithGoogle();
+
+      // Durante manutenção, apenas o administrador pode acessar o sistema para gerenciar a sessão
+      if (isMaintenanceActive && user.email !== 'wrbatata6@gmail.com') {
+        console.warn('[Manutenção] Sistema em manutenção. Apenas administradores podem logar.');
+        await logoutFirebase();
+        setCurrentUser(null);
+        currentUserRef.current = null;
+        setUserProfile(null);
+        return;
+      }
+
       setCurrentUser(user);
       currentUserRef.current = user;
       setUserProfile(profile);
@@ -843,6 +897,10 @@ export default function App() {
   };
 
   const handleContinueAsGuest = () => {
+    if (isMaintenanceActive) {
+      console.warn('[Manutenção] Convidado bloqueado durante manutenção do sistema.');
+      return;
+    }
     const { user, profile } = createGuestOperatorUser();
     setCurrentUser(user);
     currentUserRef.current = user;
@@ -853,6 +911,8 @@ export default function App() {
   const handleGoogleLogout = async () => {
     try {
       await logoutFirebase();
+      setCurrentUser(null);
+      currentUserRef.current = null;
       setUserProfile(null);
       console.log('[Firebase] Sessão encerrada com sucesso');
     } catch (err) {
@@ -874,6 +934,15 @@ export default function App() {
 
   // Handler: Start a search with Cota Check (10 Consultas)
   const handleSearch = async (moduleType: QueryModuleType, queryParam: string, isProParam?: boolean, isZyrexParam?: boolean) => {
+    // ==============================================================
+    // 0.0 CHECAGEM MANDATÁRIA DE MANUTENÇÃO (TELEGRAM DESCONECTADO)
+    // ==============================================================
+    if (isMaintenanceActive || telegramConfig.userbotStatus !== 'connected') {
+      setIsLoading(false);
+      setLoadingStepText('');
+      return;
+    }
+
     // ==============================================================
     // 0. CHECAGEM DE BLOQUEIO DE CONTA PELO ADMINISTRADOR
     // ==============================================================
@@ -1055,21 +1124,6 @@ export default function App() {
     }
   };
 
-  // Immediate reply shortcut during loading
-  const handleImmediateReply = () => {
-    if (!socket) return;
-    const targetId = currentPendingIdRef.current || pendingQueries[0]?.id;
-    const targetMod = pendingQueries.find(q => q.id === targetId)?.moduleType || selectedModule;
-    if (targetId) {
-      if (autoSimulateTimerRef.current) clearTimeout(autoSimulateTimerRef.current);
-      socket.emit('telegram:simulate_reply', {
-        requestId: targetId,
-        responseText: SAMPLE_RESPONSES[targetMod] || `Dossiê gerado com sucesso para a consulta.`,
-        operatorName: 'Motor Shazam Buscas',
-      });
-    }
-  };
-
   // Handler para quando o usuário seleciona uma base de dados interativa (CREDILINK, ZYREX, SI-PNI, etc.)
   const handleSelectOption = async (optionText: string, rowIndex?: number, colIndex?: number) => {
     if (!activeOptionsData) return;
@@ -1134,6 +1188,20 @@ export default function App() {
           onRetryLogin={handleGoogleLogin}
           onContinueAsGuest={handleContinueAsGuest}
         />
+        {/* Pop-in mandatário de manutenção */}
+        <MaintenanceModal
+          isOpen={isMaintenanceActive}
+          onLogout={handleGoogleLogout}
+          isAdmin={isAdminUser}
+          onOpenAdmin={() => setIsAdminDashboardOpen(true)}
+        />
+        <AdminDashboardModal
+          isOpen={isAdminDashboardOpen}
+          onClose={() => setIsAdminDashboardOpen(false)}
+          onUpdateSession={() => {
+            fetchSystemStatus();
+          }}
+        />
       </>
     );
   }
@@ -1141,6 +1209,9 @@ export default function App() {
   // Dashboard B2B Protegido — Apenas para usuários autenticados
   return (
     <div className="min-h-screen bg-[#012624] text-[#bbc7c6] flex flex-col font-['DM_Sans',sans-serif] selection:bg-[#00827c]/40 selection:text-[#edfffe]">
+      {/* Raio Intenso em Tela Cheia cruzando a tela ao exibir resultados */}
+      <FullScreenLightningStrike triggerKey={lightningStrikeKey} />
+
       {/* Top Application Header */}
       <Header
         isConnected={isConnected}
@@ -1189,9 +1260,15 @@ export default function App() {
           pendingCountByModule={pendingCountByModule}
         />
 
-        {/* Central Workspace: Abyssal Liquid Canvas (#012624) */}
-        <main className="flex-1 p-3.5 sm:p-6 lg:p-12 space-y-6 sm:space-y-8 overflow-y-auto bg-[#012624] min-h-[calc(100vh-5rem)] w-full max-w-full overflow-x-hidden">
-          <div className="max-w-5xl mx-auto space-y-6 sm:space-y-8">
+        {/* Central Workspace: Abyssal Liquid Canvas (#012624) with Rain & Swaying Branches Backdrop */}
+        <main 
+          id="main-workspace-canvas"
+          className="relative flex-1 overflow-y-auto bg-[#012624] min-h-[calc(100vh-5rem)] w-full max-w-full overflow-x-hidden"
+        >
+          {/* Ambient Organic Branches, Leaves, Falling Rain & Lightning Flashes */}
+          <RainBranchesBackground />
+
+          <div className="relative z-10 max-w-5xl mx-auto p-3.5 sm:p-6 lg:p-12 space-y-6 sm:space-y-8">
 
             {/* Hero Ambient Banner with 3D Bioluminescent Data Orb */}
             <div className="p-4 sm:p-6 lg:p-8 rounded-[16px] bg-[#003734] border border-[#707777]/20 flex flex-col md:flex-row items-center justify-between gap-4 sm:gap-6 overflow-hidden relative">
@@ -1269,17 +1346,6 @@ export default function App() {
                         Conexão Segura ➔ Barramento Oficial ➔ Recepção de Opções / Dossiê
                       </p>
                     </div>
-
-                    <div className="pt-2 flex items-center justify-center gap-3 flex-wrap">
-                      <button
-                        type="button"
-                        onClick={handleImmediateReply}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-[6px] bg-aurora-gradient hover:opacity-90 text-[#012624] text-xs font-medium uppercase tracking-[0.08em] transition-opacity cursor-pointer"
-                      >
-                        <Zap className="w-3.5 h-3.5 text-[#012624]" />
-                        <span>Concluir Imediatamente</span>
-                      </button>
-                    </div>
                   </div>
                 )}
               </div>
@@ -1293,6 +1359,15 @@ export default function App() {
                     <CheckCircle2 className="w-4 h-4 text-[#cbfffc]" />
                     Dossiê de Inteligência Gerado (Tempo Real)
                   </h3>
+                  <button
+                    type="button"
+                    onClick={triggerMegaLightning}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-mono font-medium text-[#cbfffc] bg-[#004d46]/70 hover:bg-[#006b63] active:scale-95 border border-[#79fbf5]/40 transition-all shadow-sm"
+                    title="Disparar Raio em Tela Cheia"
+                  >
+                    <Zap className="w-3.5 h-3.5 text-[#cbfffc] animate-pulse" />
+                    <span>Testar Raio</span>
+                  </button>
                 </div>
                 <ReportCard 
                   record={currentActiveRecord} 

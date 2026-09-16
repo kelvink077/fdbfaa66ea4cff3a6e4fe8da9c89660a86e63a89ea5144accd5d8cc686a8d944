@@ -63,10 +63,17 @@ const KNOWN_REVOKED_SESSIONS = new Set<string>([
   '1AQAOMTQ5LjE1NC4xNzUuNTIBu5YKHcvxEcuIMtKL0oc/hLO47bwJQKaa09dFqT9SkD4oXt/ZkeNJE0we5kLLmdzbSQ5sh+Q6OdBoEmUAhZKJl1V2/zU85jqwHILczdHDLlSbMHQ5tBn1P9/OPTtwyDwD/NR0ziRLyeb6liTAmG8pbk2T9A/64LFoS32Nv0CrhNqB4/FHgN3d7m9/J/i9RtFOtr6CmGtijre/5Vprgt+cIm/UX56IClX5edGtct5aULSb8fz358flBVGbgY+hsIzftN5/jv4qn4hQ/tWLQHgw5E4jR5Lqd3ayQW/k00Cm1kzBkVLLQdjSh9jnQYFOUWWyEBPfWZdVKu8ui5p5uZjM0Nk=',
 ]);
 
-const DEFAULT_STRING_SESSION = '1AQAOMTQ5LjE1NC4xNzUuNTEBu4h9eoXIcEB4CNAUrrn1b3we60d+ie/1Ab4wWhHmDgEXSBYUeGdhZxdnNWtuI1ARlQ6zS2HysL0RFDegqGflKbGx6MJehjpaOw0jhom+RqxqGPn3utZwDHNXul6gMIRhA5KXLDMkx52El2ZfPemMjGMJYhf5gPgtSJES/Q4YEAXQQkrCpFnWgshrCkBZet4yWZmhFWY0FqYrMSwGLi/6ZWTuno4HEFv2sAFE58nHOEsgg++vN5yLY3fKUFOtptljAX+S/EmA0uFA6HUB57QEWUyPz5/dt1u6LkXbQda8UviRLB7ErzWF7byziLDGH+lwvMdTETolzmn23iLkuNqvIIU=';
-let TELEGRAM_STRING_SESSION = (process.env.TELEGRAM_STRING_SESSION || DEFAULT_STRING_SESSION).trim();
-if (KNOWN_REVOKED_SESSIONS.has(TELEGRAM_STRING_SESSION)) {
-  TELEGRAM_STRING_SESSION = DEFAULT_STRING_SESSION;
+const DEFAULT_STRING_SESSION = '1AQAOMTQ5LjE1NC4xNzUuNTEBu1JfvgNNLTsTa84H2A3a+ynsXtMBXOJKt531OZWFO2zfyeCD2k5ahEKzWQOoSc1hhLJMqOmcWvW3GHYFhW0HEiaIimpWQP5m4DHhhG9aMEENalAq7Bwe3DZ7XFsBBM7++HgLhdmzPU8/ZpLd6rFASHlXEFyp571R/j6cTF75N5QfB9nNxAxqLzElle0IXS1Tqj/PxArIiYLaGEEeRKMDiwtDNHobVXHMJ5/L83dyb3XN+leXhe5b350zCXpR+3EQKO9ypUINeENlY0vCzVgolICaBT9nPEHpwk6jT/yv98aU5o3LsD5DgPpa+rLeGzhIfH6BPpqd/1Togn1lwvV64nQ=';
+let TELEGRAM_STRING_SESSION = (process.env.TELEGRAM_STRING_SESSION !== undefined 
+  ? process.env.TELEGRAM_STRING_SESSION 
+  : DEFAULT_STRING_SESSION).trim();
+if (
+  KNOWN_REVOKED_SESSIONS.has(TELEGRAM_STRING_SESSION) || 
+  TELEGRAM_STRING_SESSION === 'disconnected' || 
+  TELEGRAM_STRING_SESSION === 'none' ||
+  TELEGRAM_STRING_SESSION === 'disabled'
+) {
+  TELEGRAM_STRING_SESSION = '';
 }
 const TELEGRAM_PHONE_NUMBER = process.env.TELEGRAM_PHONE_NUMBER || '+5531981219991';
 
@@ -1455,11 +1462,8 @@ async function executeOptionSelection(
       console.warn('[GramJS] Erro ao resolver peer para polling:', peerErr?.message);
     }
   } else {
-    // Fallback simulado se não houver cliente Telegram ativo
-    setTimeout(() => {
-      const fallbackText = getSampleResponseForQuery(q.moduleType as any, q.queryParam);
-      handleIncomingTelegramResponse(requestId, `[BASE SELECIONADA: ${optionText.toUpperCase()}]\n\n${fallbackText}`, { simulated: true });
-    }, 1200);
+    // Sem cliente Telegram ativo: não inventar dados fictícios, informar manutenção
+    handleIncomingTelegramResponse(requestId, 'No momento estamos em manutenção, por favor aguarde.', { simulated: false });
   }
 
   return { ok: true };
@@ -2234,9 +2238,7 @@ async function initUserbot(customSession?: string) {
 
   if (!TELEGRAM_API_ID || !TELEGRAM_API_HASH || !sessionToUse || KNOWN_REVOKED_SESSIONS.has(sessionToUse)) {
     userbotStatus = 'disconnected';
-    lastUserbotError = !sessionToUse || KNOWN_REVOKED_SESSIONS.has(sessionToUse)
-      ? 'Aguardando String Session ativa do Telegram. Operando com o Motor de Alta Disponibilidade (Respostas Rápidas Ativas).'
-      : 'TELEGRAM_API_ID ou TELEGRAM_API_HASH ausentes no ambiente.';
+    lastUserbotError = 'No momento estamos em manutenção, por favor aguarde.';
     broadcastSystemStatus();
     isInitializingUserbot = false;
     return { success: false, error: lastUserbotError };
@@ -2324,7 +2326,7 @@ async function initUserbot(customSession?: string) {
       return { success: true, profile: userbotProfile };
     } else {
       userbotStatus = 'disconnected';
-      lastUserbotError = 'Sessão não autorizada ou revogada pelo Telegram. Operando via Motor de Alta Disponibilidade.';
+      lastUserbotError = 'No momento estamos em manutenção, por favor aguarde.';
       broadcastSystemStatus();
       return { success: false, error: lastUserbotError };
     }
@@ -2338,15 +2340,15 @@ async function initUserbot(customSession?: string) {
       rawMsg.includes('AUTH_KEY_UNREGISTERED');
 
     if (isAuthDuplicatedOrRevoked) {
-      lastUserbotError = 'AUTH_KEY_DUPLICATED (406): A String Session foi revogada ou duplicada pelo Telegram. O sistema continuará respondendo normalmente via Motor de Alta Disponibilidade.';
+      lastUserbotError = 'No momento estamos em manutenção, por favor aguarde.';
       TELEGRAM_STRING_SESSION = '';
       if (sessionToUse) {
         KNOWN_REVOKED_SESSIONS.add(sessionToUse);
       }
-      console.warn('[GramJS] Sessão do Telegram revogada ou duplicada pelo servidor do Telegram. Operando em modo de contingência de alta disponibilidade.');
+      console.warn('[GramJS] Sessão do Telegram revogada ou desconectada. Sistema em manutenção.');
     } else {
-      lastUserbotError = rawMsg;
-      console.warn('[GramJS] Aviso de conexão userbot:', lastUserbotError);
+      lastUserbotError = 'No momento estamos em manutenção, por favor aguarde.';
+      console.warn('[GramJS] Aviso de conexão userbot:', rawMsg);
     }
     broadcastSystemStatus();
     return { success: false, error: lastUserbotError };
@@ -2404,6 +2406,17 @@ async function dispatchToTelegram(record: ConsultationState & { isPro?: boolean;
     console.log(`[ROTEAMENTO PADRÃO] ⚡ Direcionando busca NORMAL (${record.moduleType}) para -> ${targetChatId} com comando: "${commandText}"`);
   }
 
+  if (!userbotClient || userbotStatus !== 'connected') {
+    console.warn(`[GramJS] Falha no despacho: String Session desconectada (${userbotStatus}). Sistema em manutenção.`);
+    return {
+      sent: false,
+      error: 'No momento estamos em manutenção, por favor aguarde.',
+      isMaintenance: true,
+      userbotStatus,
+      targetChatId,
+    };
+  }
+
   if (userbotClient && userbotStatus === 'connected') {
     try {
       const peer = await resolveTelegramPeer(userbotClient, targetChatId);
@@ -2442,83 +2455,32 @@ async function dispatchToTelegram(record: ConsultationState & { isPro?: boolean;
           console.error(`[GramJS] Falha também no fallback numérico:`, retryErr?.message);
         }
       }
+
+      userbotStatus = 'disconnected';
+      lastUserbotError = 'No momento estamos em manutenção, por favor aguarde.';
+      broadcastSystemStatus();
+      return {
+        sent: false,
+        error: 'No momento estamos em manutenção, por favor aguarde.',
+        isMaintenance: true,
+        userbotStatus: 'disconnected',
+        targetChatId,
+      };
     }
   }
 
-  // Motor de Inteligência de Alta Disponibilidade (Garante resposta de inteligência rápida sem travar o sistema)
-  console.log(`[BRDATA Central] Processando consulta via motor de inteligência de alta disponibilidade para: "${commandText}"`);
-  return { 
-    sent: true, 
-    isFallback: true, 
-    messageId: Math.floor(Date.now() / 1000) + Math.floor(Math.random() * 10000), 
-    commandText, 
-    targetChatId: isZyrex ? TELEGRAM_CHAT_ID_KREX : (isPro ? TELEGRAM_CHAT_ID_PRO : (TELEGRAM_CHAT_ID_OLD || 'BRDATA_CORE')), 
-    isPro,
-    isZyrex,
-    isKrex: isZyrex,
+  return {
+    sent: false,
+    error: 'No momento estamos em manutenção, por favor aguarde.',
+    isMaintenance: true,
+    userbotStatus,
+    targetChatId,
   };
 }
 
-// Resolve fallback dinâmico com dados reais do ViaCEP para CEP e endereços
-async function resolveDynamicFallbackResponse(moduleType: any, queryParam: string): Promise<string> {
-  if (moduleType === 'cep' || String(moduleType).includes('cep')) {
-    const cleanCep = String(queryParam).replace(/\D/g, '').slice(0, 8);
-    if (cleanCep.length === 8) {
-      try {
-        const vRes = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
-        if (vRes.ok) {
-          const vd: any = await vRes.json();
-          if (!vd.erro) {
-            return `📍 [VARREDURA DE MORADORES & LOGRADOURO POR CEP]
-=========================================
-• CEP CONSULTADO: ${vd.cep || cleanCep}
-• LOGRADOURO: ${vd.logradouro || 'Logradouro Principal'}
-• COMPLEMENTO: ${vd.complemento || 'Sem Informação'}
-• BAIRRO: ${vd.bairro || 'Bairro Mapeado'}
-• CIDADE: ${vd.localidade || 'Ibirité'}
-• ESTADO: ${vd.uf || 'MG'}
-• CÓDIGO IBGE: ${vd.ibge || '3129806'}
-• DDD: ${vd.ddd || '31'}
-• SITUAÇÃO CADASTRAL: Ativo nos Correios e Receita Federal
-
-🔍 STATUS DA AUDITORIA NO BARRAMENTO:
-- Logradouro e CEP confirmados na base nacional oficial dos Correios.
-- Nenhum residente individual vinculado diretamente a este CEP geral na listagem pública preliminar.
-- Para consultar moradores de um número predial específico, utilize o mapa interativo ou a busca por CPF.`;
-          }
-        }
-      } catch (err: any) {
-        console.warn('[ViaCEP Fallback] Erro:', err?.message);
-      }
-    }
-  }
-
-  // Tratamento para consultas de endereço / logradouro
-  const lowerParam = String(queryParam || '').toLowerCase();
-  const isAddressQuery = moduleType === 'endereco' || String(moduleType).includes('endereco') || String(moduleType).includes('rua') || String(moduleType).includes('logradouro');
-  if (isAddressQuery || lowerParam.includes('joao de deus') || lowerParam.includes('ibirite') || lowerParam.includes('prefeito joao')) {
-    if (lowerParam.includes('joao de deus') || lowerParam.includes('ibirite') || lowerParam.includes('prefeito joao') || lowerParam.includes('32415')) {
-      return `📍 [LOCALIZAÇÃO & LOGRADOURO AUDITADO]
-=========================================
-• LOGRADOURO: Avenida Prefeito João de Deus Campos
-• NÚMERO: 75
-• BAIRRO: Industrial de Ibirité
-• CIDADE: Ibirité
-• ESTADO: MG
-• CEP OFICIAL: 32415-181
-• CÓDIGO IBGE: 3129806
-• DDD REGIONAL: 31
-• TIPO DE IMÓVEL: Condomínio / Edifício
-• COORDENADAS: -20.0098, -44.0902
-• SITUAÇÃO: Registrado e Auditado na Base Territorial dos Correios
-
-🔍 AUDITORIA DO BARRAMENTO:
-- Dados confirmados via Base Oficial dos Correios e Geocodificação Nacional.
-- Nenhum morador individual vinculado diretamente ao número predial na listagem pública preliminar.`;
-    }
-  }
-
-  return getSampleResponseForQuery(moduleType as any, queryParam);
+// Em caso de ausência de resposta do Telegram, nunca inventar dados: informar manutenção
+async function resolveDynamicFallbackResponse(_moduleType: any, _queryParam: string): Promise<string> {
+  return 'No momento estamos em manutenção, por favor aguarde.';
 }
 
 // Função para reiniciar o robô com /start e imediatamente continuar a busca
@@ -2620,13 +2582,6 @@ async function executeRestartAndRetry(options: {
         isZyrex,
         message: 'Robô reiniciado com /start! Aguardando retorno da consulta...' 
       });
-    }
-
-    if ((dispatchResult as any).isFallback) {
-      setTimeout(async () => {
-        const fallbackText = await resolveDynamicFallbackResponse(moduleType as any, queryParam);
-        handleIncomingTelegramResponse(requestId, fallbackText, { simulated: true });
-      }, 1300 + Math.floor(Math.random() * 500));
     }
 
     return { ok: true, requestId, status: 'processing', record };
@@ -2752,31 +2707,49 @@ io.on('connection', (socket) => {
         message: 'Solicitação despachada com sucesso! Aguardando retorno da base...' 
       });
 
-      if ((dispatchResult as any).isFallback) {
-        setTimeout(async () => {
-          const fallbackText = await resolveDynamicFallbackResponse(moduleType as any, queryParam);
-          handleIncomingTelegramResponse(requestId, fallbackText, { simulated: true });
-        }, 1300 + Math.floor(Math.random() * 500));
-      }
+      // Timeout estrito de resposta do Telegram: se o robô não responder em 15s, não inventar dados e informar manutenção
+      const telegramReplyTimeout = setTimeout(() => {
+        if (activeQueries.has(requestId)) {
+          console.warn(`[GramJS Timeout] O Telegram não respondeu à consulta ${requestId} (${record.queryParam}) em 15s. Emitindo aviso de manutenção.`);
+          activeQueries.delete(requestId);
+          if (record.telegramMessageId) queryByTelegramMsgId.delete(record.telegramMessageId);
+          
+          const maintenanceRecord: ConsultationState = {
+            ...record,
+            status: 'error',
+            errorMessage: 'No momento estamos em manutenção, por favor aguarde.',
+            rawResponse: 'No momento estamos em manutenção, por favor aguarde.',
+          };
+          queryHistory.unshift(maintenanceRecord);
+          socket.emit('query:response', maintenanceRecord);
+          io.emit('query:completed_broadcast', maintenanceRecord);
+        }
+      }, 15000);
+      (record as any).replyTimeoutTimer = telegramReplyTimeout;
     } else {
       record.status = 'failed';
-      record.error = dispatchResult.error || 'Falha ao despachar mensagem ao barramento.';
+      record.error = dispatchResult.error || 'No momento estamos em manutenção, por favor aguarde.';
       socket.emit('query:error', {
         requestId,
         error: record.error,
         userbotStatus,
         lastError: lastUserbotError,
         requiresReconnect: true,
+        isMaintenance: true,
+      });
+      socket.emit('query:response', {
+        ...record,
+        status: 'error',
+        errorMessage: 'No momento estamos em manutenção, por favor aguarde.',
+        rawResponse: 'No momento estamos em manutenção, por favor aguarde.',
       });
     }
     io.emit('telegram:query_created', { ...record, dispatchResult, userbotStatus, isPro, isZyrex });
   });
 
-  socket.on('telegram:simulate_reply', async (payload) => {
-    let targetRequestId = payload.requestId || (payload.telegramMessageId ? queryByTelegramMsgId.get(payload.telegramMessageId) : null);
-    if (targetRequestId && activeQueries.has(targetRequestId)) {
-      handleIncomingTelegramResponse(targetRequestId, payload.responseText, { simulated: true });
-    }
+  socket.on('telegram:simulate_reply', async () => {
+    // Simulação desativada: o sistema nunca deve inventar dados.
+    console.warn('[Security] Tentativa de emitir resposta simulada bloqueada. Dados simulados são proibidos.');
   });
 
   // Listener para seleção de opção/base de dados pelo usuário
@@ -2892,6 +2865,10 @@ function handleIncomingTelegramResponse(requestId: string, rawText: string, meta
     };
   }
 
+  if ((record as any).replyTimeoutTimer) {
+    clearTimeout((record as any).replyTimeoutTimer);
+    (record as any).replyTimeoutTimer = null;
+  }
   if ((record as any).ttlTimer) {
     clearTimeout((record as any).ttlTimer);
     (record as any).ttlTimer = null;
@@ -3966,17 +3943,37 @@ app.post('/api/query/request', queryLimiter, requireAuth, async (req, res) => {
     record.status = 'processing';
     queryByTelegramMsgId.set(dispatchResult.messageId, requestId);
 
-    if ((dispatchResult as any).isFallback) {
-      setTimeout(async () => {
-        const fallbackText = await resolveDynamicFallbackResponse(moduleType as any, queryParam);
-        handleIncomingTelegramResponse(requestId, fallbackText, { simulated: true });
-      }, 1300 + Math.floor(Math.random() * 500));
-    }
+    // Timeout estrito de resposta do Telegram: se o robô não responder em 15s, não inventar dados e informar manutenção
+    const telegramReplyTimeout = setTimeout(() => {
+      if (activeQueries.has(requestId)) {
+        console.warn(`[GramJS Timeout] O Telegram não respondeu à consulta ${requestId} (${record.queryParam}) em 15s.`);
+        activeQueries.delete(requestId);
+        if (record.telegramMessageId) queryByTelegramMsgId.delete(record.telegramMessageId);
+        
+        const maintenanceRecord: ConsultationState = {
+          ...record,
+          status: 'error',
+          errorMessage: 'No momento estamos em manutenção, por favor aguarde.',
+          rawResponse: 'No momento estamos em manutenção, por favor aguarde.',
+        };
+        queryHistory.unshift(maintenanceRecord);
+        io.emit('query:response', maintenanceRecord);
+        io.emit('query:completed_broadcast', maintenanceRecord);
+      }
+    }, 15000);
+    (record as any).replyTimeoutTimer = telegramReplyTimeout;
+
     return res.json({ ok: true, requestId, status: 'processing', record });
   } else {
     record.status = 'failed';
-    record.error = dispatchResult.error || 'Falha ao despachar mensagem ao barramento.';
-    return res.status(500).json({ ok: false, requestId, error: record.error, userbotStatus });
+    record.error = dispatchResult.error || 'No momento estamos em manutenção, por favor aguarde.';
+    return res.status(503).json({ 
+      ok: false, 
+      requestId, 
+      error: 'No momento estamos em manutenção, por favor aguarde.', 
+      userbotStatus,
+      isMaintenance: true,
+    });
   }
 });
 
